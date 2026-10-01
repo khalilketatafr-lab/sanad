@@ -10,4 +10,23 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+# Native AES-256-GCM seal/open + HKDF chunk-key derivation (Atelier, Kernel, tests).
+# The browser never enables this: there, keys are non-extractable WebCrypto keys
+# and decryption is crypto.subtle.decrypt over the slices this codec exposes.
+seal = ["dep:aws-lc-rs", "dep:zeroize"]
+# libzstd compressor for producing payloads (Atelier, fixtures).
+compress = ["dep:zstd"]
+
 [dependencies]
+flatbuffers.workspace = true
+ruzstd.workspace = true
+thiserror.workspace = true
+aws-lc-rs = { workspace = true, optional = true }
+zeroize = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true
+hex.workspace = true

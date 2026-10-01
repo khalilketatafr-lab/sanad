@@ -1,0 +1,185 @@
+// Folio payload schema, format v1.
+//
+// This is the plaintext INSIDE an encrypted Folio chunk (after AES-256-GCM
+// open and zstd decode). It is decoded zero-copy inside WASM linear memory and
+// never mirrored into JS objects.
+//
+// P1 INVARIANT: this schema contains no `string` fields, and never will. Text
+// exists only as per-edition PERMUTED glyph ids (π(gid)); the cmap, the
+// permutation and all Unicode stay on the server. Anything textual a reader
+// legitimately needs (alt text, TOC labels, a11y text) is either a glyph run
+// or an opaque reference resolved by the Kernel's metered endpoints.
+// Enforced by crates/folio/tests/schema_p1.rs.
+//
+// Units: run metrics are font units (font.upem from the manifest); page
+// geometry is PDF points (1/72 in). Multi-byte scalars are little-endian
+// (FlatBuffers wire format).
+
+namespace sanad.folio.v1;
+
+file_identifier "FOL1";
+file_extension "folio";
+
+enum BlockKind : ubyte {
+  Paragraph = 0,
+  Heading,
+  Quote,
+  ListItem,
+  Figure,
+  Table,
+  Rule,
+  Break,
+}
+
+enum Direction : ubyte {
+  Ltr = 0,
+  Rtl = 1,
+}
+
+/// Per-glyph flags. Values are bit positions (bit_flags).
+enum GlyphFlags : ubyte (bit_flags) {
+  /// First glyph of a grapheme cluster. Anchors count clusters.
+  ClusterStart,
+  /// A line may break after this glyph.
+  BreakOk,
+  /// Inter-word glue: may stretch or shrink when justifying.
+  Glue,
+  /// Discretionary hyphenation point after this glyph.
+  HyphenPoint,
+  /// Kashida (tatweel) elongation allowed after this glyph (Arabic).
+  KashidaOk,
+  /// First glyph of a word (selection snapping, search highlight geometry).
+  WordStart,
+  /// First glyph of a sentence (sentence selection, read-aloud sync).
+  SentenceStart,
+  /// Never stretch around this glyph (e.g. inside numbers, URLs).
+  NoJustify,
+}
+
+/// Mark/kerning displacement, font units.
+struct GlyphOffset {
+  x: short;
+  y: short;
+}
+
+/// A shaped run: one font, one style, one bidi direction. Structure-of-arrays:
+/// every non-empty vector has exactly `gids.length` elements.
+table Run {
+  /// Index into the manifest's font table.
+  font: ubyte;
+  /// Index into the manifest's style table (size, weight, color role, decoration).
+  style: ushort;
+  /// PERMUTED glyph ids: π_edition(font_gid). Never Unicode code points.
+  gids: [ushort] (required);
+  /// Horizontal advances, font units. Variant B chunks carry micro-perturbations.
+  advances: [short] (required);
+  /// Optional per-glyph displacement; empty means all zero.
+  offsets: [GlyphOffset];
+  /// GlyphFlags bitfield per glyph.
+  flags: [ubyte] (required);
+  /// UAX #9 resolved embedding level per glyph (rules up to L1 applied server-side).
+  bidi_levels: [ubyte] (required);
+  /// Kashida priority per glyph (0 = none, 1 = highest … 7 = lowest); empty if no KashidaOk.
+  kashida_priority: [ubyte];
+  /// Per-glyph max kashida elongation, font units; empty if no KashidaOk.
+  kashida_max: [ushort];
+}
+
+/// Figure reference. `alt_ref` is an opaque id resolved by the Kernel's a11y
+/// endpoint; alt text never travels inside a chunk.
+table ImageRef {
+  image: ushort;
+  alt_ref: uint;
+  caption: [Run];
+}
+
+table Block {
+  kind: BlockKind = Paragraph;
+  /// Heading level (1–6) or list depth.
+  level: ubyte;
+  style: ushort;
+  /// Paragraph base direction.
+  dir: Direction = Ltr;
+  runs: [Run];
+  figure: ImageRef;
+  /// Keep this block on the same page as the next (headings, captions).
+  keep_with_next: bool = false;
+}
+
+/// Reflowable content: shaped, NOT line-broken (blueprint decision D1).
+/// Blocks are whole paragraphs; chunk boundaries never split a paragraph.
+table FlowChunk {
+  blocks: [Block] (required);
+}
+
+// ---------------------------------------------------------------- fixed layout
+
+struct Rect {
+  x: float;
+  y: float;
+  w: float;
+  h: float;
+}
+
+/// One positioned glyph on a fixed-layout page (PDF origin), 16 bytes.
+struct GlyphInstance {
+  /// PERMUTED glyph id.
+  gid: ushort;
+  /// Index into the manifest's font table.
+  font: ubyte;
+  /// Ink role: 0 = ink, 1 = ink2, 2 = accent, 3+ = manifest color table.
+  color: ubyte;
+  /// Baseline origin, points.
+  x: float;
+  y: float;
+  /// Font size, points.
+  size: float;
+}
+
+/// Art-layer tile in the image pyramid (text removed at ingest).
+struct TileRef {
+  level: ubyte;
+  x: ushort;
+  y: ushort;
+}
+
+struct ImagePlacement {
+  image: ushort;
+  rect: Rect;
+}
+
+/// Column/paragraph/panel rectangle in reading order: double-tap smart zoom,
+/// guided view, selection geometry.
+struct BlockRect {
+  rect: Rect;
+  order: ushort;
+  kind: BlockKind;
+  dir: Direction;
+}
+
+table Page {
+  width: float;
+  height: float;
+  glyphs: [GlyphInstance];
+  art_tiles: [TileRef];
+  images: [ImagePlacement];
+  blocks: [BlockRect];
+}
+
+table PageChunk {
+  pages: [Page] (required);
+}
+
+// ------------------------------------------------------------------------ root
+
+union Body {
+  FlowChunk,
+  PageChunk,
+}
+
+table Payload {
+  /// Must agree with the container header's `kind` (checked by the codec).
+  body: Body (required);
+}
+
+root_type Payload;

@@ -1,0 +1,34 @@
+[package]
+name = "sanad-folio-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+sanad-folio = { path = ".." }
+
+# Own workspace: fuzz targets build with nightly + sanitizers, separate from
+# the stable main workspace (which excludes this directory).
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "chunk_header"
+path = "fuzz_targets/chunk_header.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "payload"
+path = "fuzz_targets/payload.rs"
+test = false
+doc = false
+bench = false
