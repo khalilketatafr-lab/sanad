@@ -3,11 +3,13 @@
 //! Phase 0 skeleton (spike S4): device registration with DPoP proof of
 //! possession (RFC 9449), DPoP-bound PASETO access tokens, stateless nonces,
 //! `jti` replay protection, the auth extractor every later route builds on,
+//! passkey accounts (WebAuthn, see [`webauthn`]) that devices sign in to,
 //! and stub leases: chunk keys ECDH-wrapped to the device, with a Reading
 //! Capability Token.
 //!
 //! Spec: `docs/blueprint/01-architecture.md` §3.
 
+pub mod accounts;
 pub mod auth;
 pub mod catalog;
 pub mod config;
@@ -20,6 +22,7 @@ pub mod nonce;
 pub mod replay;
 pub mod routes;
 pub mod token;
+pub mod webauthn;
 
 use core::time::Duration;
 use std::sync::Arc;
@@ -35,13 +38,18 @@ use tower_http::trace::TraceLayer;
 use url::Url;
 use zeroize::Zeroizing;
 
+use crate::accounts::AccountStore;
 use crate::catalog::Catalog;
 use crate::config::KernelConfig;
 use crate::devices::DeviceStore;
 use crate::dpop::DpopVerifier;
 use crate::nonce::NonceManager;
 use crate::replay::ReplayCache;
-use crate::token::{TokenError, TokenIssuer};
+use crate::token::{CEREMONY_TTL, TokenError, TokenIssuer};
+use crate::webauthn::RelyingParty;
+
+/// Active devices per account (blueprint 01 §3.2).
+pub const MAX_DEVICES_PER_USER: usize = 6;
 
 /// Shared Kernel state.
 #[derive(Debug)]
@@ -52,7 +60,10 @@ pub struct Kernel {
     pub replay: ReplayCache,
     pub tokens: TokenIssuer,
     pub devices: DeviceStore,
+    pub accounts: AccountStore,
     pub catalog: Catalog,
+    /// Single use of passkey ceremony challenges, per device key.
+    pub ceremonies: ReplayCache,
 }
 
 pub type AppState = Arc<Kernel>;
@@ -87,7 +98,12 @@ impl Kernel {
             // Entries must outlive the iat acceptance window on both sides.
             replay: ReplayCache::new(2 * config.proof_skew_secs + 1, 1_000_000),
             tokens,
+            accounts: AccountStore::alongside(&devices),
             devices,
+            ceremonies: ReplayCache::new(
+                CEREMONY_TTL.as_secs() as i64 + config.proof_skew_secs,
+                100_000,
+            ),
             // Production editions come from Postgres (KMS-wrapped TMKs); the
             // development catalog holds only the canary book under a test key.
             catalog: if config.production {
@@ -97,6 +113,17 @@ impl Kernel {
             },
             config,
         })
+    }
+
+    /// The WebAuthn relying party: our RP ID; ceremonies may only run on the
+    /// reader origins.
+    #[must_use]
+    pub fn relying_party(&self) -> RelyingParty {
+        RelyingParty {
+            id: self.config.rp_id.clone(),
+            name: "Sanad".into(),
+            origins: self.config.reader_origins.clone(),
+        }
     }
 
     /// Canonical external URL of a request path, for `htu` comparison. The
@@ -127,6 +154,8 @@ pub fn router(state: AppState) -> Router {
         .route(routes::devices::PATH, post(routes::devices::register))
         .route(routes::devices::SELF_PATH, get(routes::devices::get_self))
         .route(routes::editions::PATH, post(routes::editions::open))
+        .route(routes::passkeys::BEGIN, post(routes::passkeys::begin))
+        .route(routes::passkeys::FINISH, post(routes::passkeys::finish))
         .layer(RequestBodyLimitLayer::new(16 * 1024))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

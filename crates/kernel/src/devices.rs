@@ -39,6 +39,12 @@ pub struct NewDevice {
 pub enum StoreError {
     #[error("a revoked device cannot be re-registered with the same key")]
     Revoked,
+    #[error("this device is signed in to another account")]
+    OtherUser,
+    #[error("the account already has the maximum number of active devices")]
+    DeviceCap,
+    #[error("no such device")]
+    NotFound,
     #[error("storage: {0}")]
     Backend(String),
 }
@@ -153,6 +159,75 @@ impl DeviceStore {
                     .fetch_optional(pool)
                     .await?;
                 Ok(row.map(from_row))
+            }
+        }
+    }
+
+    /// Attaches a device to a user after a passkey sign-in on it. Idempotent
+    /// for the same user. Refused when the device belongs to another account
+    /// or the user already has `cap` other active devices.
+    pub async fn attach_user(
+        &self,
+        id: Uuid,
+        user_id: Uuid,
+        cap: usize,
+    ) -> Result<Device, StoreError> {
+        match self {
+            Self::Memory(m) => {
+                let mut m = m.write().map_err(poisoned)?;
+                let others = m
+                    .by_id
+                    .values()
+                    .filter(|d| d.id != id && d.user_id == Some(user_id) && d.revoked_at.is_none())
+                    .count();
+                let device = m.by_id.get_mut(&id).ok_or(StoreError::NotFound)?;
+                match device.user_id {
+                    Some(u) if u == user_id => return Ok(device.clone()),
+                    Some(_) => return Err(StoreError::OtherUser),
+                    None if others >= cap => return Err(StoreError::DeviceCap),
+                    None => device.user_id = Some(user_id),
+                }
+                Ok(device.clone())
+            }
+            Self::Postgres(pool) => {
+                let mut tx = pool.begin().await?;
+                // Serialize attaches per user so the cap cannot be raced.
+                sqlx::query("SELECT id FROM users WHERE id = $1 FOR UPDATE")
+                    .bind(user_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+                let row: Option<Row> = sqlx::query_as(
+                    "SELECT id, user_id, dpop_jkt, ecdh_pub, created_at, revoked_at FROM devices WHERE id = $1 FOR UPDATE",
+                )
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await?;
+                let device = from_row(row.ok_or(StoreError::NotFound)?);
+                match device.user_id {
+                    Some(u) if u == user_id => return Ok(device),
+                    Some(_) => return Err(StoreError::OtherUser),
+                    None => {}
+                }
+                let (others,): (i64,) = sqlx::query_as(
+                    "SELECT count(*) FROM devices WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL",
+                )
+                .bind(user_id)
+                .bind(id)
+                .fetch_one(&mut *tx)
+                .await?;
+                if usize::try_from(others).unwrap_or(usize::MAX) >= cap {
+                    return Err(StoreError::DeviceCap);
+                }
+                sqlx::query("UPDATE devices SET user_id = $2 WHERE id = $1")
+                    .bind(id)
+                    .bind(user_id)
+                    .execute(&mut *tx)
+                    .await?;
+                tx.commit().await?;
+                Ok(Device {
+                    user_id: Some(user_id),
+                    ..device
+                })
             }
         }
     }

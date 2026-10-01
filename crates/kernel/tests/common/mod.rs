@@ -26,6 +26,8 @@ use tower::ServiceExt;
 use url::Url;
 use uuid::Uuid;
 
+pub mod authenticator;
+
 pub const ORIGIN: &str = "https://kernel.sanad.test";
 
 pub struct Harness {
@@ -38,7 +40,9 @@ pub fn harness() -> Harness {
 }
 
 pub fn harness_with(store: DeviceStore) -> Harness {
-    let config = KernelConfig::development(Url::parse(ORIGIN).unwrap());
+    let mut config = KernelConfig::development(Url::parse(ORIGIN).unwrap());
+    config.reader_origins = vec![authenticator::READER.into()];
+    config.rp_id = authenticator::RP_ID.into();
     let kernel = Arc::new(Kernel::new(config, store).unwrap());
     Harness {
         app: router(kernel.clone()),
@@ -200,4 +204,30 @@ pub async fn register(h: &Harness, dev: &TestDevice) -> String {
     assert_eq!(ok.body["dpop_jkt"], dev.jkt());
     assert!(ok.headers.contains_key("dpop-nonce"));
     ok.body["access_token"].as_str().unwrap().to_owned()
+}
+
+/// POST `body` to a DPoP-protected route as `dev` holding `token`.
+pub async fn post_json(
+    h: &Harness,
+    dev: &TestDevice,
+    token: &str,
+    path: &str,
+    body: &Value,
+) -> Response {
+    let proof = dev.proof(
+        "POST",
+        path,
+        Some(&h.nonce()),
+        Some(token),
+        &Tweak::default(),
+    );
+    h.send(
+        Request::post(path)
+            .header("authorization", format!("DPoP {token}"))
+            .header("dpop", proof)
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap(),
+    )
+    .await
 }

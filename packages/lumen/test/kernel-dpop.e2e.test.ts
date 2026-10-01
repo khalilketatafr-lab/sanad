@@ -223,6 +223,59 @@ test("browser: lease unwrap and chunk decryption with WebCrypto, chunks from the
   }
 });
 
+test("passkeys: sign up on one device, sign in on another with the synced passkey", async () => {
+  // Chromium's virtual authenticator: a real CTAP2 platform authenticator in
+  // software, with resident keys and user verification. Each browser context
+  // is a separate device (its own IndexedDB device keys).
+  const browser = await chromium.launch();
+  const authenticator = {
+    protocol: "ctap2",
+    transport: "internal",
+    hasResidentKey: true,
+    hasUserVerification: true,
+    isUserVerified: true,
+    automaticPresenceSimulation: true,
+  } as const;
+  type Result = { deviceId: string; userId: string; selfUser: string | null; credentialId: string };
+  try {
+    const ctxA = await browser.newContext();
+    const pageA = await ctxA.newPage();
+    await pageA.goto(readerOrigin);
+    const cdpA = await ctxA.newCDPSession(pageA);
+    await cdpA.send("WebAuthn.enable");
+    const { authenticatorId: authA } = await cdpA.send("WebAuthn.addVirtualAuthenticator", { options: authenticator });
+    const up = (await pageA.evaluate(
+      (o) => (globalThis as unknown as { Vault: { passkey: (o: string, m: string) => Promise<unknown> } }).Vault.passkey(o, "up"),
+      kernelOrigin,
+    )) as Result;
+    assert.equal(up.selfUser, up.userId, "device A is signed in to the new account");
+    const { credentials } = await cdpA.send("WebAuthn.getCredentials", { authenticatorId: authA });
+    assert.equal(credentials.length, 1);
+    assert.equal(credentials[0]?.isResidentCredential, true, "a discoverable credential (passkey)");
+
+    // Device B: another profile to which the passkey manager synced the credential.
+    const ctxB = await browser.newContext();
+    const pageB = await ctxB.newPage();
+    await pageB.goto(readerOrigin);
+    const cdpB = await ctxB.newCDPSession(pageB);
+    await cdpB.send("WebAuthn.enable");
+    const { authenticatorId: authB } = await cdpB.send("WebAuthn.addVirtualAuthenticator", { options: authenticator });
+    const synced = credentials[0];
+    assert.ok(synced);
+    await cdpB.send("WebAuthn.addCredential", { authenticatorId: authB, credential: synced });
+    const signedIn = (await pageB.evaluate(
+      (o) => (globalThis as unknown as { Vault: { passkey: (o: string, m: string) => Promise<unknown> } }).Vault.passkey(o, "in"),
+      kernelOrigin,
+    )) as Result;
+    assert.notEqual(signedIn.deviceId, up.deviceId, "a different device");
+    assert.equal(signedIn.userId, up.userId, "the same account, without a username");
+    assert.equal(signedIn.selfUser, up.userId);
+    assert.equal(signedIn.credentialId, up.credentialId);
+  } finally {
+    await browser.close();
+  }
+});
+
 test("an origin outside SANAD_READER_ORIGINS is blocked by CORS", async () => {
   const browser = await chromium.launch();
   try {

@@ -95,12 +95,18 @@ pub async fn register(
         .await
         .map_err(|e| match e {
             StoreError::Revoked => ApiError::Forbidden("this device key has been revoked"),
-            StoreError::Backend(_) => ApiError::Internal,
+            _ => ApiError::Internal,
         })?;
     let claims = AccessClaims {
         device_id: device.id,
         jkt: proof.jkt.clone(),
-        tier: "anonymous".into(),
+        tier: if device.user_id.is_some() {
+            "member"
+        } else {
+            "anonymous"
+        }
+        .into(),
+        user_id: device.user_id,
     };
     let access_token = k.tokens.issue(&claims).map_err(|_| ApiError::Internal)?;
     tracing::info!(device = %device.id, jkt = %proof.jkt, "device registered");

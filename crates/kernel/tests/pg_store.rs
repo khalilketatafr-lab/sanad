@@ -8,7 +8,8 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::{TestDevice, Tweak, harness_with, register, self_request};
+use common::authenticator::{Passkey, READER};
+use common::{TestDevice, Tweak, harness_with, post_json, register, self_request};
 use sanad_kernel::devices::{DeviceStore, NewDevice, StoreError};
 use sqlx::postgres::PgPoolOptions;
 
@@ -97,4 +98,71 @@ async fn full_dpop_flow_on_postgres() {
     let res = h.send(self_request(&proof, &token, "DPoP")).await;
     assert_eq!(res.status, StatusCode::OK, "{}", res.body);
     assert_eq!(res.body["dpop_jkt"], dev.jkt());
+}
+
+#[tokio::test]
+async fn passkey_accounts_on_postgres() {
+    let Some(store) = store().await else { return };
+    let h = harness_with(store.clone());
+    let (a, b) = (TestDevice::new(), TestDevice::new());
+    let token_a = register(&h, &a).await;
+    let begin = post_json(
+        &h,
+        &a,
+        &token_a,
+        "/kernel/v1/auth/passkey:begin",
+        &serde_json::json!({ "mode": "register" }),
+    )
+    .await;
+    assert_eq!(begin.status, StatusCode::OK, "{}", begin.body);
+    let (pk, cred) = Passkey::create(&begin.body["publicKey"], READER);
+    let fin = post_json(
+        &h,
+        &a,
+        &token_a,
+        "/kernel/v1/auth/passkey:finish",
+        &serde_json::json!({ "ceremony": begin.body["ceremony"], "credential": cred }),
+    )
+    .await;
+    assert_eq!(fin.status, StatusCode::OK, "{}", fin.body);
+    let user = fin.body["user_id"].as_str().unwrap().to_owned();
+
+    let token_b = register(&h, &b).await;
+    let begin = post_json(
+        &h,
+        &b,
+        &token_b,
+        "/kernel/v1/auth/passkey:begin",
+        &serde_json::json!({ "mode": "authenticate" }),
+    )
+    .await;
+    let cred = pk.get(&begin.body["publicKey"], READER);
+    let fin = post_json(
+        &h,
+        &b,
+        &token_b,
+        "/kernel/v1/auth/passkey:finish",
+        &serde_json::json!({ "ceremony": begin.body["ceremony"], "credential": cred }),
+    )
+    .await;
+    assert_eq!(fin.status, StatusCode::OK, "{}", fin.body);
+    assert_eq!(fin.body["user_id"], user);
+
+    // Both devices now belong to the user in the database.
+    let DeviceStore::Postgres(pool) = &store else {
+        unreachable!()
+    };
+    let (n,): (i64,) = sqlx::query_as("SELECT count(*) FROM devices WHERE user_id = $1::uuid")
+        .bind(&user)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(n, 2);
+    let (last_used,): (bool,) =
+        sqlx::query_as("SELECT last_used_at IS NOT NULL FROM passkeys WHERE user_id = $1::uuid")
+            .bind(&user)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert!(last_used);
 }

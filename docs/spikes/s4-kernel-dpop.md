@@ -109,3 +109,52 @@ its identity against the lease, and decrypts.
 | Rust integration (4) | Full router flow; RCT verifies and is bound to the DPoP key; window clipping; 404 for unknown editions and operations; 401 without a DPoP-bound token |
 | TS e2e, Node | Unwrap against the real binary, decrypt chunks sealed by `seal_fixture`, reject tampered and swapped chunks, no key outside the window, another device cannot unwrap |
 | TS e2e, Chromium | The same on the reader origin with IndexedDB keys, chunks fetched over HTTP like a CDN; keys report `extractable: false`, usages `["decrypt"]` |
+
+## Passkeys (roadmap §10.5)
+
+`POST /kernel/v1/auth/passkey:begin` / `:finish`. Both are DPoP-protected:
+a ceremony always runs on a registered device and ends by **attaching that
+device to the account**, with a new access token (`tier: member`, `uid`).
+
+- **Sign up** (`mode: register`) creates an account whose only credential is
+  the new passkey. There is no password column anywhere; the WebAuthn user
+  handle is 32 random bytes, never an id or an email. A device that is
+  already signed in adds a passkey to its account instead.
+- **Sign in** (`mode: authenticate`) uses discoverable credentials, so the
+  reader never types a username.
+- **Ceremony state:** a signed token (PASETO, implicit assertion
+  `sanad-kernel/webauthn/v1`, 5 min). It is bound to the device's DPoP
+  thumbprint and accepted once. Replicas share no session store.
+- **Device rules:** at most 6 active devices per account (blueprint 01 §3.2).
+  A device signed in to one account cannot silently join another.
+
+### Why not `webauthn-rs`
+
+`webauthn-rs-core` 0.5.4 depends on `openssl`/`openssl-sys`. That would mean
+a second crypto stack and a system C library in a service that otherwise runs
+only `aws-lc-rs`. What we need is narrow and fully specified, so
+`crates/kernel/src/webauthn.rs` implements it, about 450 lines with tests:
+
+- WebAuthn L3 §7.1 and §7.2 verification;
+- ES256, EdDSA and RS256, which covers platform authenticators, passkey
+  managers and Windows Hello;
+- `none` attestation only, the consumer-passkey norm;
+- user verification required.
+
+| Check | Where |
+|---|---|
+| `clientDataJSON`: type, challenge (constant-time), origin ∈ reader origins, `crossOrigin` false | `verify_client_data` |
+| `rpIdHash` = SHA-256(RP ID); RP ID validated at startup to cover every reader origin (§5.1.4.1) | `AuthenticatorData`, `config::rp_id_covers` |
+| UP **and** UV flags; BS ⇒ BE; AT exactly when registering; ED extensions skipped by parsing, trailing bytes rejected | `AuthenticatorData::parse` |
+| `fmt: "none"` with an empty `attStmt`; anything else refused | `verify_registration` |
+| COSE keys: P-256 points validated on the curve, Ed25519 length, RSA ≥ 2048 bits; other algorithms refused | `CoseKey` |
+| Signature over `authData ‖ SHA-256(clientDataJSON)` (ASN.1 ECDSA, Ed25519, PKCS#1 v1.5) | `verify_assertion` |
+| Counter must increase unless both sides are 0 (synced passkeys) | `verify_assertion` |
+| `rawId` = attested credential id; `userHandle` = stored handle | route |
+
+| Test | Proves |
+|---|---|
+| Rust unit (6), software authenticator | All three algorithms register and sign in; every rule above rejects its violation |
+| Rust integration (4) | Sign up on device A, synced sign-in on device B, single-use device-bound ceremonies, phishing origin, tampered signature, account switch refused, 6-device cap |
+| Rust on Postgres (1) | The same flow against the migrations; both devices owned by the user in SQL |
+| Chromium e2e (1) | Real WebAuthn through Chromium's CTAP2 virtual authenticator. Device A signs up, the credential is copied into a second profile, and device B signs in to the same account with no username |

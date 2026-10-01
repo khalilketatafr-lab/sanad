@@ -20,6 +20,23 @@ export interface Registration {
   readonly dpop_jkt: string;
 }
 
+/** What `passkey:finish` returns: the device is now signed in to the account. */
+export interface PasskeySession {
+  readonly user_id: string;
+  readonly access_token: string;
+  readonly token_type: "DPoP";
+  readonly expires_in: number;
+  readonly dpop_jkt: string;
+  readonly credential_id: string;
+}
+
+export interface PasskeyCeremony {
+  /** Signed ceremony state; send it back unchanged to `passkeyFinish`. */
+  readonly ceremony: string;
+  /** `PublicKeyCredentialCreationOptionsJSON` or `…RequestOptionsJSON`. */
+  readonly publicKey: Record<string, unknown>;
+}
+
 export class KernelError extends Error {
   override readonly name = "KernelError";
   readonly status: number;
@@ -99,8 +116,24 @@ export class KernelClient {
     return (await res.json()) as Lease;
   }
 
-  async self(): Promise<{ id: string; dpop_jkt: string }> {
+  async self(): Promise<{ id: string; dpop_jkt: string; user_id: string | null }> {
     const res = await this.#send("GET", "/kernel/v1/devices/self", undefined, true);
-    return (await res.json()) as { id: string; dpop_jkt: string };
+    return (await res.json()) as { id: string; dpop_jkt: string; user_id: string | null };
+  }
+
+  /** Starts a passkey ceremony on this (registered) device. */
+  async passkeyBegin(mode: "register" | "authenticate", name?: string): Promise<PasskeyCeremony> {
+    const body = name === undefined ? { mode } : { mode, name };
+    const res = await this.#send("POST", "/kernel/v1/auth/passkey:begin", body, true);
+    return (await res.json()) as PasskeyCeremony;
+  }
+
+  /** Completes it; on success the device is signed in and the client holds a member token. */
+  async passkeyFinish(ceremony: string, credential: Record<string, unknown>): Promise<PasskeySession> {
+    const res = await this.#send("POST", "/kernel/v1/auth/passkey:finish", { ceremony, credential }, true);
+    const session = (await res.json()) as PasskeySession;
+    if (session.dpop_jkt !== (await this.jkt())) throw new KernelError(0, "jkt_mismatch", "Kernel bound the token to another key");
+    this.#token = session.access_token;
+    return session;
   }
 }

@@ -28,6 +28,9 @@ pub const ISSUER: &str = "sanad-kernel";
 pub const AUDIENCE: &str = "sanad";
 const IMPLICIT: &[u8] = b"sanad-kernel/access/v1";
 const IMPLICIT_RCT: &[u8] = b"sanad-kernel/rct/v1";
+const IMPLICIT_CEREMONY: &[u8] = b"sanad-kernel/webauthn/v1";
+/// How long a passkey ceremony may take (WebAuthn timeout + margin).
+pub const CEREMONY_TTL: Duration = Duration::from_mins(5);
 
 #[derive(Debug, Error)]
 pub enum TokenError {
@@ -45,6 +48,28 @@ pub struct AccessClaims {
     /// cnf.jkt: the only key allowed to sign proofs for this token.
     pub jkt: String,
     pub tier: String,
+    /// The passkey account the device is signed in to (`uid`), if any.
+    pub user_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CeremonyMode {
+    Register,
+    Authenticate,
+}
+
+/// State of a WebAuthn ceremony between `passkey:begin` and `passkey:finish`,
+/// carried by the client as a signed token (no server-side session). It is
+/// bound to the device's DPoP key and used once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CeremonyClaims {
+    pub mode: CeremonyMode,
+    pub challenge: [u8; 32],
+    pub jkt: String,
+    /// Registration: the account the new passkey belongs to.
+    pub user_id: Option<Uuid>,
+    /// Registration: the WebAuthn user handle sent to the authenticator.
+    pub user_handle: Option<Vec<u8>>,
 }
 
 /// What a lease grants, for services that never see the lease itself.
@@ -116,7 +141,76 @@ impl TokenIssuer {
             .map_err(|_| TokenError::Issue)?;
         c.add_additional("tier", claims.tier.clone())
             .map_err(|_| TokenError::Issue)?;
+        if let Some(uid) = claims.user_id {
+            c.add_additional("uid", uid.to_string())
+                .map_err(|_| TokenError::Issue)?;
+        }
         public::sign(&self.secret, &c, None, Some(IMPLICIT)).map_err(|_| TokenError::Issue)
+    }
+
+    pub fn issue_ceremony(&self, claims: &CeremonyClaims) -> Result<String, TokenError> {
+        let mut c = Claims::new_expires_in(&CEREMONY_TTL).map_err(|_| TokenError::Issue)?;
+        c.issuer(ISSUER).map_err(|_| TokenError::Issue)?;
+        c.audience(AUDIENCE).map_err(|_| TokenError::Issue)?;
+        let mode = match claims.mode {
+            CeremonyMode::Register => "register",
+            CeremonyMode::Authenticate => "authenticate",
+        };
+        c.add_additional("mode", mode)
+            .map_err(|_| TokenError::Issue)?;
+        c.add_additional("chl", crate::jose::b64url(&claims.challenge))
+            .map_err(|_| TokenError::Issue)?;
+        c.add_additional("jkt", claims.jkt.clone())
+            .map_err(|_| TokenError::Issue)?;
+        if let Some(uid) = claims.user_id {
+            c.add_additional("uid", uid.to_string())
+                .map_err(|_| TokenError::Issue)?;
+        }
+        if let Some(h) = &claims.user_handle {
+            c.add_additional("uh", crate::jose::b64url(h))
+                .map_err(|_| TokenError::Issue)?;
+        }
+        public::sign(&self.secret, &c, None, Some(IMPLICIT_CEREMONY)).map_err(|_| TokenError::Issue)
+    }
+
+    pub fn verify_ceremony(&self, token: &str) -> Result<CeremonyClaims, TokenError> {
+        let mut rules = ClaimsValidationRules::new();
+        rules.validate_issuer_with(ISSUER);
+        rules.validate_audience_with(AUDIENCE);
+        let untrusted =
+            UntrustedToken::<Public, V4>::try_from(token).map_err(|_| TokenError::Invalid)?;
+        let trusted = public::verify(
+            &self.public,
+            &untrusted,
+            &rules,
+            None,
+            Some(IMPLICIT_CEREMONY),
+        )
+        .map_err(|_| TokenError::Invalid)?;
+        let c = trusted.payload_claims().ok_or(TokenError::Invalid)?;
+        let text = |k: &str| c.get_claim(k).and_then(Value::as_str);
+        let mode = match text("mode") {
+            Some("register") => CeremonyMode::Register,
+            Some("authenticate") => CeremonyMode::Authenticate,
+            _ => return Err(TokenError::Invalid),
+        };
+        let challenge: [u8; 32] = text("chl")
+            .and_then(|s| crate::jose::b64url_decode(s).ok())
+            .and_then(|b| b.try_into().ok())
+            .ok_or(TokenError::Invalid)?;
+        Ok(CeremonyClaims {
+            mode,
+            challenge,
+            jkt: text("jkt").ok_or(TokenError::Invalid)?.to_owned(),
+            user_id: text("uid")
+                .map(Uuid::parse_str)
+                .transpose()
+                .map_err(|_| TokenError::Invalid)?,
+            user_handle: text("uh")
+                .map(crate::jose::b64url_decode)
+                .transpose()
+                .map_err(|_| TokenError::Invalid)?,
+        })
     }
 
     /// A Reading Capability Token, valid for the lease TTL.
@@ -211,10 +305,17 @@ impl TokenIssuer {
             .and_then(Value::as_str)
             .unwrap_or("anonymous")
             .to_owned();
+        let user_id = claims
+            .get_claim("uid")
+            .and_then(Value::as_str)
+            .map(Uuid::parse_str)
+            .transpose()
+            .map_err(|_| TokenError::Invalid)?;
         Ok(AccessClaims {
             device_id,
             jkt,
             tier,
+            user_id,
         })
     }
 }
@@ -228,6 +329,7 @@ mod tests {
             device_id: Uuid::now_v7(),
             jkt: "abc".into(),
             tier: "anonymous".into(),
+            user_id: None,
         }
     }
 

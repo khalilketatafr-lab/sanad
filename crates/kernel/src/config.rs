@@ -5,7 +5,8 @@
 //! | `SANAD_ENV` | `production` makes every secret mandatory |
 //! | `SANAD_KERNEL_BIND` | listen address (default `127.0.0.1:8787`) |
 //! | `SANAD_KERNEL_PUBLIC_ORIGIN` | external origin used for DPoP `htu` checks, e.g. `https://kernel.sanad.app` |
-//! | `SANAD_READER_ORIGINS` | comma-separated CORS origins, e.g. `https://read.sanad.app` |
+//! | `SANAD_READER_ORIGINS` | comma-separated CORS origins, e.g. `https://read.sanad.app`; also the only origins passkey ceremonies may run on |
+//! | `SANAD_WEBAUTHN_RP_ID` | WebAuthn RP ID, e.g. `sanad.app` (default `localhost`); every reader origin's host must be it or a subdomain of it |
 //! | `SANAD_KERNEL_TOKEN_KEY` | base64url Ed25519 secret key (64 bytes) for PASETO access tokens |
 //! | `SANAD_KERNEL_NONCE_KEY` | base64url 32-byte HMAC key for DPoP nonces |
 //! | `DATABASE_URL` | Postgres (required in production; in-memory store otherwise) |
@@ -36,6 +37,7 @@ pub struct KernelConfig {
     pub bind: SocketAddr,
     pub public_origin: Url,
     pub reader_origins: Vec<String>,
+    pub rp_id: String,
     pub token_key: Option<Zeroizing<Vec<u8>>>,
     pub nonce_key: Option<Zeroizing<[u8; 32]>>,
     pub database_url: Option<String>,
@@ -53,6 +55,7 @@ impl KernelConfig {
             bind: SocketAddr::from(([127, 0, 0, 1], 8787)),
             public_origin,
             reader_origins: Vec::new(),
+            rp_id: "localhost".into(),
             token_key: None,
             nonce_key: None,
             database_url: None,
@@ -115,13 +118,25 @@ impl KernelConfig {
             })
             .transpose()?;
 
+        let reader_origins: Vec<String> = get("SANAD_READER_ORIGINS")
+            .map(|v| v.split(',').map(|s| s.trim().to_owned()).collect())
+            .unwrap_or_default();
+        let rp_id = require("SANAD_WEBAUTHN_RP_ID")?.unwrap_or_else(|| "localhost".into());
+        for origin in &reader_origins {
+            if !rp_id_covers(&rp_id, origin) {
+                return Err(ConfigError::Invalid(
+                    "SANAD_WEBAUTHN_RP_ID",
+                    format!("{rp_id} is not a registrable suffix of {origin}"),
+                ));
+            }
+        }
+
         Ok(Self {
             production,
             bind,
             public_origin,
-            reader_origins: get("SANAD_READER_ORIGINS")
-                .map(|v| v.split(',').map(|s| s.trim().to_owned()).collect())
-                .unwrap_or_default(),
+            reader_origins,
+            rp_id,
             token_key,
             nonce_key,
             database_url: require("DATABASE_URL")?,
@@ -130,5 +145,29 @@ impl KernelConfig {
                     .map_err(|e| ConfigError::Invalid("default", e.to_string()))?,
             )
         })
+    }
+}
+
+/// WebAuthn §5.1.4.1: an origin may use `rp_id` if its host equals it or is
+/// a subdomain of it.
+#[must_use]
+pub fn rp_id_covers(rp_id: &str, origin: &str) -> bool {
+    Url::parse(origin)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_owned))
+        .is_some_and(|host| host == rp_id || host.ends_with(&format!(".{rp_id}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rp_id_covers;
+
+    #[test]
+    fn rp_id_must_be_the_host_or_a_parent_domain() {
+        assert!(rp_id_covers("sanad.app", "https://read.sanad.app"));
+        assert!(rp_id_covers("read.sanad.app", "https://read.sanad.app"));
+        assert!(rp_id_covers("localhost", "http://localhost:5173"));
+        assert!(!rp_id_covers("sanad.app", "https://evilsanad.app"));
+        assert!(!rp_id_covers("read.sanad.app", "https://sanad.app"));
     }
 }

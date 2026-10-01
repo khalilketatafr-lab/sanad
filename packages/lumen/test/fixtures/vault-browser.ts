@@ -3,6 +3,7 @@ import { IndexedDbKeyStore, loadOrCreateDeviceKeys } from "../../src/vault/devic
 import { openChunk } from "../../src/vault/folio.ts";
 import { KernelClient } from "../../src/vault/kernel-client.ts";
 import { chunkKeyId, unwrapLease } from "../../src/vault/lease.ts";
+import { signInWithPasskey, signUpWithPasskey } from "../../src/vault/passkeys.ts";
 
 export async function run(kernelOrigin: string): Promise<Record<string, unknown>> {
   const store = new IndexedDbKeyStore();
@@ -40,4 +41,14 @@ export async function lease(kernelOrigin: string, editionId: string): Promise<Re
     digests[chunk] = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", plain)), (b) => b.toString(16).padStart(2, "0")).join("");
   }
   return { window: l.window, digests, keyProps, rctPrefix: l.rct.slice(0, 10) };
+}
+
+/** Registers this device and signs up or in with a passkey (virtual authenticator). */
+export async function passkey(kernelOrigin: string, mode: "up" | "in"): Promise<Record<string, unknown>> {
+  const { keys } = await loadOrCreateDeviceKeys(new IndexedDbKeyStore());
+  const client = new KernelClient(kernelOrigin, keys);
+  const reg = await client.register({ tier: "B" });
+  const session = mode === "up" ? await signUpWithPasskey(client, "reader@example.org") : await signInWithPasskey(client);
+  const self = await client.self();
+  return { deviceId: reg.device_id, userId: session.user_id, selfUser: self.user_id, credentialId: session.credential_id };
 }

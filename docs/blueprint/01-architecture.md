@@ -323,8 +323,8 @@ Rust and TypeScript with `buf`.
 
 | Endpoint | Purpose | Auth |
 |---|---|---|
-| `POST /kernel/v1/auth/passkey:{begin,finish}` | WebAuthn ceremonies | — |
-| `POST /kernel/v1/devices` | Register device public keys | Session |
+| `POST /kernel/v1/auth/passkey:{begin,finish}` | WebAuthn ceremonies: sign up or sign in *this device* | DPoP |
+| `POST /kernel/v1/devices` | Register device public keys (anonymous until a passkey signs in) | DPoP proof |
 | `POST /kernel/v1/editions/{id}:open` | Manifest + first lease | DPoP |
 | `POST /kernel/v1/leases/{id}:renew` | Slide window, sync position, telemetry digest | DPoP |
 | `POST /kernel/v1/leases:jump` | Navigation-intent jump (TOC, search, bookmark, note) | DPoP + RCT |

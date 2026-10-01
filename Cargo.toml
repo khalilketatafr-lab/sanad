@@ -51,6 +51,7 @@ pasetors = { version = "0.8", default-features = false, features = ["std", "v4"]
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 url = "2"
+ciborium = "0.2"                  # CBOR for WebAuthn (attestation objects, COSE keys)
 # TLS via rustls on aws-lc-rs: one crypto stack in the Kernel.
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "postgres", "uuid", "time", "json", "migrate", "macros"] }
 
