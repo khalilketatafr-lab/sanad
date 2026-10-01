@@ -1,0 +1,11 @@
+[package]
+name = "sanad-tokens"
+description = "Marginalia theme tokens for Rust: Pass 3 shader uniforms generated from packages/tokens/tokens.json."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

@@ -28,6 +28,7 @@ interface Result {
   scales: Record<string, { maxUnion: Diff; additive: Diff; singleFragment: Diff; inkMass: number }>;
   weight: { thinner: number; neutral: number; bolder: number };
   paperY: number;
+  chrome: Record<string, { paper: number[]; expectedPaper: number[]; inkPixels: number; expectedInk: number[] }>;
   laterReadback: { distinctColors: number; firstPixel: number[]; inFrameDistinctColors: number };
   loss: { simulated: boolean; stateAfterLoss: string; stateAfterRestore: string; restoredCalls: number };
 }
@@ -101,6 +102,14 @@ test("u_weightPx compensates stroke weight monotonically", () => {
 
 test("u_lumaCeil clamps luminance (anti-glare)", () => {
   assert.ok(Math.abs(result.paperY - 0.45) < 0.01, `paper Y ${result.paperY}`);
+});
+
+test("every theme renders exactly its CSS chrome colors (@sanad/tokens)", () => {
+  assert.equal(Object.keys(result.chrome).length, 5);
+  for (const [id, c] of Object.entries(result.chrome)) {
+    c.paper.forEach((v, i) => assert.ok(Math.abs(v - (c.expectedPaper[i] ?? -9)) <= 1, `${id}: paper ${c.paper} ≠ ${c.expectedPaper}`));
+    assert.ok(c.inkPixels > 500, `${id}: only ${c.inkPixels} px render the CSS ink ${c.expectedInk}`);
+  }
 });
 
 test("context loss and restore are handled", () => {

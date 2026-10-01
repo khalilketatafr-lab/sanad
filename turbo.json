@@ -17,6 +17,10 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "@sanad/tokens#typecheck": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
     "@sanad/p1-harness#p1": {
       "dependsOn": ["@sanad/reader#build"],
       "inputs": ["$TURBO_DEFAULT$", "../../fixtures/canary/**"],

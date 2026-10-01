@@ -153,12 +153,18 @@ Per-theme shader parameters:
 |---|---|---|---|---|
 | Paper | +0.05 | 0.90 | 1.00 | natural |
 | Linen | +0.05 | 0.90 | 0.92 | natural |
-| Dusk | −0.12 | 1.10 | 0.55 | dimmed / smart-invert |
-| Night | −0.18 | 1.15 | 0.45 | dimmed / smart-invert |
-| OLED | −0.22 | 1.20 | 0.38 | dimmed / smart-invert |
+| Dusk | −0.12 | 1.10 | 0.68 | dimmed / smart-invert |
+| Night | −0.18 | 1.15 | 0.60 | dimmed / smart-invert |
+| OLED | −0.22 | 1.20 | 0.44 | dimmed / smart-invert |
 
-These are starting values. Final tuning happens per font with golden-page
-reviews on real devices.
+`lumaCeil` scales every output pixel, so it must never touch the theme's own
+palette. In light themes it sits at or above the paper. In dark themes it is
+the ink's luminance rounded up to 0.01, so no image pixel can outshine the
+text, and the text itself is never dimmed. The token build enforces both
+rules.
+
+These are starting values. Final tuning of `weightPx` and `covGamma` happens
+per font with golden-page reviews on real devices.
 
 ### 4.3 Highlight colors
 
@@ -177,27 +183,58 @@ list (● ▲ ■ ◆), so meaning never relies on hue alone.
 
 ### 4.4 Tokens: one source for chrome and shaders
 
-`packages/tokens/tokens.json` uses the W3C Design Tokens format and is built
-by Style Dictionary into three outputs: **CSS custom properties** for the
-chrome, **TS constants** for logic, and **shader uniform blocks** for Lumen.
-The settings sheet and the page behind it can never drift apart.
+`packages/tokens/tokens.json` uses the W3C Design Tokens format (DTCG
+2025.10). Colors are authored in OKLCH, and each one carries its `hex`, which
+must be the exact 8-bit rounding of the OKLCH value. Style Dictionary
+(`packages/tokens/sd-config.js`) builds three outputs from one validated model:
+
+| Output | Path | Consumer |
+|---|---|---|
+| CSS custom properties | `packages/tokens/build/css/themes.css` | Reader chrome |
+| TS constants | `packages/tokens/build/ts/tokens.ts` | App logic, and Lumen's Pass 3 uniforms (`THEMES[id].uniforms`) |
+| Rust uniforms struct | `crates/tokens/src/theme_uniforms.rs` (committed) | Native renderers and offline tools (golden pages, proofs) |
+
+Shader colors are the **linearized shipped hex**, so the WebGL page and the CSS
+chrome produce identical 8-bit pixels. The settings sheet and the page behind
+it can never drift apart. A Lumen GPU test renders every theme and compares the
+pixels with the CSS values.
 
 ```css
 :root,
 [data-theme="paper"] {
-  --paper: #FBFAF7;  --ink: #1D1C1A;  --ink-2: #5E5A53;  --accent: #2F5D8A;
-  --surface-1: #FFFFFF;  --surface-2: #F4F2EE;  --hairline: rgb(29 28 26 / 0.10);
-  --glass-tint: rgb(251 250 247 / 0.88);  --ink-2-on-glass: #4F4B45;
-  --focus-ring: 0 0 0 3px rgb(47 93 138 / 0.45);
+  color-scheme: light;
+  --paper: #fbfaf7;  --ink: #1d1c1a;  --ink-2: #5e5a53;  --accent: #2f5d8a;
+  --surface-1: #ffffff;  --surface-2: #f4f2ee;  --hairline: rgb(29 28 26 / 0.1);
+  --glass-tint: rgb(251 250 247 / 0.88);  --ink-2-on-glass: #4f4b45;
+  --focus-ring: 0 0 0 3px rgb(47 93 138 / 0.8);
+  /* + --highlight-1 … --highlight-4 */
 }
 [data-theme="night"] {
-  --paper: #141414;  --ink: #CFCAC1;  --ink-2: #8F8A82;  --accent: #8FA9C9;
-  --surface-1: #1C1C1E;  --surface-2: #232325;  --hairline: rgb(207 202 193 / 0.12);
-  --glass-tint: rgb(28 28 30 / 0.88);  --ink-2-on-glass: #B3AEA5;
-  --focus-ring: 0 0 0 3px rgb(143 169 201 / 0.55);
+  color-scheme: dark;
+  --paper: #141414;  --ink: #cfcac1;  --ink-2: #8f8a82;  --accent: #8fa9c9;
+  --surface-1: #1c1c1e;  --surface-2: #232325;  --hairline: rgb(207 202 193 / 0.12);
+  --glass-tint: rgb(28 28 30 / 0.9);  --ink-2-on-glass: #b3aea5;
+  --focus-ring: 0 0 0 3px rgb(143 169 201 / 0.8);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) { /* night */ }
 }
 /* linen, dusk, oled: same shape; generated, never hand-edited */
 ```
+
+The build fails on any of the following:
+
+- a hex that is not the rounding of its OKLCH value;
+- an out-of-gamut color;
+- a missing or unknown token;
+- a derived token (glass tint, hairline, focus ring) that no longer matches
+  its base color;
+- a dark theme with positive weight;
+- a glare ceiling below any palette color.
+
+The token tests also enforce the contrast floors, the glass and focus-ring
+guarantees below, and agreement with every table in this section. CI rebuilds
+the committed Rust file and fails if it is stale.
 
 ---
 
@@ -260,7 +297,7 @@ time alone*; every motion answers a reader action.
 
 ```css
 .settings-surface {
-  background: var(--glass-tint);                 /* 88% tint: legibility floor */
+  background: var(--glass-tint);                 /* per-theme tint: legibility floor */
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid var(--hairline);
@@ -273,9 +310,11 @@ time alone*; every motion answers a reader action.
 }
 ```
 
-- **Legibility guarantee:** with an 88% tint, the *worst case* (dark image
-  under light glass, white image under dark glass) still gives primary
-  labels ≥ 7.3:1 and secondary labels ≥ 5.4:1 (`--ink-2-on-glass`). The glass
+- **Legibility guarantee:** the tint alpha is set per theme: Paper 0.88,
+  Linen 0.88, Dusk 0.94, Night 0.90, OLED 0.95. Each value is the lowest at
+  which the *worst case* (a pure black or pure white backdrop under the glass)
+  still gives primary labels ≥ 7:1 and secondary labels ≥ 5.4:1
+  (`--ink-2-on-glass`). The token tests check both backdrops. The glass
   shows enough to feel alive and never compromises text.
 - **Performance:** backdrop blur over a WebGL canvas is composited by the
   browser. Tier C devices get the solid surface automatically.
@@ -439,7 +478,9 @@ width, Zoom % · Guided view (column or panel) · Spreads (on or off).
   every theme exceeds (§4.2).
 - React Aria Components for all interactive primitives: correct roles, focus
   management, keyboard support and RTL behavior by default.
-- Visible focus rings (`--focus-ring`), never removed. Focus is trapped
+- Visible focus rings (`--focus-ring`: accent at 80%, 3 px), never removed.
+  The ring reaches ≥ 3:1 against paper, both surfaces and worst-case glass in
+  every theme (SC 1.4.11, enforced by the token tests). Focus is trapped
   inside open sheets and restored on close.
 - Respect `prefers-reduced-motion`, `prefers-reduced-transparency`,
   `prefers-contrast: more` (which raises ink and accent contrast by a further

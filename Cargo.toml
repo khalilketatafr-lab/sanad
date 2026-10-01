@@ -5,6 +5,7 @@ members = [
     "crates/compositor",
     "crates/kernel",
     "crates/atelier",
+    "crates/tokens",
 ]
 # cargo-fuzz targets build with nightly + sanitizers in their own workspace.
 exclude = ["crates/folio/fuzz"]
@@ -22,6 +23,7 @@ repository = "https://github.com/khalilketatafr-lab/sanad"
 sanad-folio = { path = "crates/folio" }
 sanad-compositor = { path = "crates/compositor" }
 sanad-atelier = { path = "crates/atelier" }
+sanad-tokens = { path = "crates/tokens" }
 
 # format & serialization
 flatbuffers = "=25.12.19"          # MUST equal the pinned flatc version (tools/flatc.version)

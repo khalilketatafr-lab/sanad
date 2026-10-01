@@ -3,10 +3,12 @@
  * the production context, shaders and renderer against an atlas baked by the
  * production shredder (crates/atelier), and reports measurements.
  */
+import { THEME_IDS, THEMES } from "@sanad/tokens/ts";
 import { createLumenContext } from "../src/gl/context.ts";
 import { LumenRenderer, orthoCamera } from "../src/gl/renderer.ts";
 import { GLYPH_INSTANCE, ROLE } from "../src/gl/shaders.ts";
-import { hexToLinear, type ThemeUniforms } from "../src/gl/theme.ts";
+import type { ThemeUniforms } from "../src/gl/theme.ts";
+import { themeUniforms } from "../src/gl/themes.ts";
 
 interface AtlasMeta {
   readonly width: number;
@@ -19,18 +21,11 @@ interface AtlasMeta {
 const W = 288;
 const H = 288;
 
-const PAPER: ThemeUniforms = {
-  paper: hexToLinear("#FBFAF7"),
-  ink: hexToLinear("#1D1C1A"),
-  ink2: hexToLinear("#5E5A53"),
-  accent: hexToLinear("#2F5D8A"),
-  highlights: [hexToLinear("#F7E8A4"), hexToLinear("#CFEBC9"), hexToLinear("#CFE0F5"), hexToLinear("#F5D3DC")],
-  covGamma: 1,
-  weightPx: 0,
-  lumaCeil: 1,
-  warmth: 0,
-  dim: 0,
-};
+// Paper colors with a neutral coverage curve, weight and ceiling, so the
+// shredding measurements isolate geometry.
+const PAPER: ThemeUniforms = { ...themeUniforms("paper"), covGamma: 1, weightPx: 0, lumaCeil: 1 };
+
+const rgbOf = (hex: string): number[] => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
 
 function instances(meta: AtlasMeta, slots: readonly number[], size: number): ArrayBuffer {
   const buf = new ArrayBuffer(slots.length * GLYPH_INSTANCE.stride);
@@ -121,6 +116,21 @@ export async function run(meta: AtlasMeta, atlasB64: string): Promise<Record<str
   };
   const paperY = 0.2126 * lin(glare[0] ?? 0) + 0.7152 * lin(glare[1] ?? 0) + 0.0722 * lin(glare[2] ?? 0);
 
+  // Every theme, with its real token uniforms: the page must render exactly
+  // the CSS chrome colors (paper where there is no ink, ink where coverage is
+  // full), and no theme parameter (weight, curve, glare ceiling) may shift them.
+  const chrome: Record<string, { paper: number[]; expectedPaper: number[]; inkPixels: number; expectedInk: number[] }> = {};
+  for (const id of THEME_IDS) {
+    const t = THEMES[id];
+    const px = draw([0], 256, "max", themeUniforms(id));
+    const ink = rgbOf(t.css["--ink"]);
+    let inkPixels = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      if (Math.abs((px[i] ?? 0) - (ink[0] ?? 0)) <= 1 && Math.abs((px[i + 1] ?? 0) - (ink[1] ?? 0)) <= 1 && Math.abs((px[i + 2] ?? 0) - (ink[2] ?? 0)) <= 1) inkPixels++;
+    }
+    chrome[id] = { paper: Array.from(px.subarray(0, 3)), expectedPaper: rgbOf(t.css["--paper"]), inkPixels, expectedInk: ink };
+  }
+
   // preserveDrawingBuffer=false: after the frame is composited the buffer is
   // cleared, so a later readback cannot recover the page.
   const inFrame = draw([0], 256, "max", PAPER);
@@ -151,6 +161,7 @@ export async function run(meta: AtlasMeta, atlasB64: string): Promise<Record<str
     scales,
     weight,
     paperY,
+    chrome,
     laterReadback: {
       distinctColors: distinct.size,
       firstPixel: Array.from(later.subarray(0, 4)),

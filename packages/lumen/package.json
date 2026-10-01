@@ -5,7 +5,6 @@
   "type": "module",
   "description": "Lumen: Sanad's secure reader engine (WebGL2 renderer, workers, vault crypto).",
   "exports": {
-    ".": "./src/index.ts",
     "./gl/*": "./src/gl/*.ts",
     "./vault/*": "./src/vault/*.ts",
     "./input/*": "./src/input/*.ts"
@@ -21,6 +20,7 @@
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@sanad/lumen-wasm": "workspace:*"
+    "@sanad/lumen-wasm": "workspace:*",
+    "@sanad/tokens": "workspace:*"
   }
 }

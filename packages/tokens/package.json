@@ -1,0 +1,23 @@
+{
+  "name": "@sanad/tokens",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Marginalia design tokens (W3C DTCG 2025.10) \u2192 CSS variables, TS constants, Rust shader uniforms.",
+  "exports": {
+    "./tokens.json": "./tokens.json",
+    "./css": "./build/css/themes.css",
+    "./ts": "./build/ts/tokens.ts"
+  },
+  "scripts": {
+    "build": "node build.ts",
+    "check": "node build.ts --check",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "style-dictionary": "catalog:",
+    "typescript": "catalog:"
+  }
+}

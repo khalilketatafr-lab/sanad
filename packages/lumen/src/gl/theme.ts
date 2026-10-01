@@ -1,23 +1,14 @@
 /**
- * Theme uniforms for Pass 3. Values are generated from @sanad/tokens (D6);
- * colors are LINEAR sRGB, never gamma-encoded hex, so blending happens in
- * linear light.
+ * Theme uniforms for Pass 3. The theme-owned part is generated from
+ * @sanad/tokens (D6); colors are LINEAR sRGB of the shipped hex, never
+ * gamma-encoded, so blending happens in linear light and the page matches the
+ * CSS chrome exactly. Warmth and extra-dim are reader settings layered on top.
  */
+import type { Rgb, ThemeShaderUniforms } from "@sanad/tokens/ts";
 
-export type Rgb = readonly [number, number, number];
+export type { Rgb };
 
-export interface ThemeUniforms {
-  readonly paper: Rgb;
-  readonly ink: Rgb;
-  readonly ink2: Rgb;
-  readonly accent: Rgb;
-  readonly highlights: readonly [Rgb, Rgb, Rgb, Rgb];
-  /** Coverage curve exponent. */
-  readonly covGamma: number;
-  /** Optical weight compensation, screen px (+ bolder, − thinner). */
-  readonly weightPx: number;
-  /** Anti-glare luminance ceiling (linear Y). 1 = off. */
-  readonly lumaCeil: number;
+export interface ThemeUniforms extends ThemeShaderUniforms {
   /** 0 neutral … 1 = full warm (≈ 3400 K). */
   readonly warmth: number;
   /** Extra-dim, 0 … 0.6. */

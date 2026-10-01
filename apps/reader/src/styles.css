@@ -1,11 +1,7 @@
-/* Placeholder palette until @sanad/tokens (D6) is wired in; values = Paper theme. */
+/* Theme custom properties (and color-scheme) are generated from tokens.json. */
+@import "@sanad/tokens/css";
+
 :root {
-  color-scheme: light dark;
-  --paper: #fbfaf7;
-  --ink: #1d1c1a;
-  --ink-2: #5e5a53;
-  --accent: #2f5d8a;
-  --focus-ring: 0 0 0 3px rgb(47 93 138 / 0.45);
   font-family: Inter, "IBM Plex Sans Arabic", system-ui, sans-serif;
 }
 
