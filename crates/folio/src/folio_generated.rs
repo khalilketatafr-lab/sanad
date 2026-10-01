@@ -1394,6 +1394,10 @@ pub enum RunOffset {}
 
 /// A shaped run: one font, one style, one bidi direction. Structure-of-arrays:
 /// every non-empty vector has exactly `gids.length` elements.
+/// Glyphs are in LOGICAL order (Atelier un-reverses HarfBuzz's visual-order
+/// RTL output, keeping each cluster's internal glyph order). The Compositor
+/// breaks lines in logical order, then applies UAX #9 rule L2 per line at
+/// cluster granularity.
 pub struct Run<'a> {
   pub _tab: ::flatbuffers::Table<'a>,
 }

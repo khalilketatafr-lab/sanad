@@ -83,6 +83,10 @@ importers:
         version: 8.3.2(@types/node@22.20.4)(esbuild@0.28.2)
 
   packages/lumen:
+    dependencies:
+      '@sanad/lumen-wasm':
+        specifier: workspace:*
+        version: link:../lumen-wasm
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -96,6 +100,8 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+
+  packages/lumen-wasm: {}
 
   tools/p1-harness:
     dependencies:

@@ -1,0 +1,14 @@
+{
+  "name": "@sanad/lumen-wasm",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "wasm-bindgen output of crates/compositor (built, never committed).",
+  "exports": {
+    ".": "./pkg/sanad_compositor.js",
+    "./sanad_compositor_bg.wasm": "./pkg/sanad_compositor_bg.wasm"
+  },
+  "scripts": {
+    "build": "bash build.sh"
+  }
+}

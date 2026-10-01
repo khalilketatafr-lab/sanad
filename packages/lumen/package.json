@@ -19,5 +19,8 @@
     "esbuild": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@sanad/lumen-wasm": "workspace:*"
   }
 }
