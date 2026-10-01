@@ -22,6 +22,19 @@
       "dependsOn": ["build"],
       "outputs": []
     },
+    "@sanad/theme-review#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/crates/atelier/**",
+        "$TURBO_ROOT$/crates/compositor/**",
+        "$TURBO_ROOT$/fixtures/fonts/**",
+        "$TURBO_ROOT$/fixtures/typeset/*.txt",
+        "$TURBO_ROOT$/Cargo.lock",
+        "!**/*.md"
+      ],
+      "outputs": ["dist/**"]
+    },
     "@sanad/p1-harness#p1": {
       "dependsOn": ["@sanad/reader#build"],
       "inputs": ["$TURBO_DEFAULT$", "../../fixtures/canary/**"],

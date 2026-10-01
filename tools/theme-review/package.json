@@ -1,0 +1,20 @@
+{
+  "name": "@sanad/theme-review",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Roadmap §10.6: a self-contained page that renders the golden pages with Lumen on a real phone, in every theme, beside the chrome swatches.",
+  "scripts": {
+    "build": "node build.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sanad/lumen": "workspace:*",
+    "@sanad/tokens": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "esbuild": "catalog:",
+    "typescript": "catalog:"
+  }
+}
