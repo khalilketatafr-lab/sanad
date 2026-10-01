@@ -1,0 +1,599 @@
+# Sanad launch catalog: the first 50 titles (roadmap §10.7).
+#
+# Schema, rights rules and statuses: README.md beside this file. Validated by
+# `cargo test -p sanad-atelier --test launch_catalog`. Every source below was
+# checked when it was listed: Standard Ebooks URLs resolve, Gutenberg numbers
+# match the Gutenberg catalog (title, language, contributors), and Wikisource
+# pages exist (completeness noted where partial).
+
+schema = 1
+rights_as_of = 2026
+
+# ── English: Standard Ebooks (CC0; collated against scans by SE) ──────────
+
+[[title]]
+id = "en-austen-pride-and-prejudice"
+title = "Pride and Prejudice"
+lang = "en"
+creators = [{ name = "Jane Austen", role = "author", died = 1817 }]
+published = 1813
+status = "typesetting"
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice" }
+notes = "Chapter I is the Latin golden page; the reference for Literata's colour on a full page."
+
+[[title]]
+id = "en-c-bronte-jane-eyre"
+title = "Jane Eyre"
+lang = "en"
+creators = [{ name = "Charlotte Brontë", role = "author", died = 1855 }]
+published = 1847
+status = "typesetting"
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/charlotte-bronte/jane-eyre" }
+
+[[title]]
+id = "en-e-bronte-wuthering-heights"
+title = "Wuthering Heights"
+lang = "en"
+creators = [{ name = "Emily Brontë", role = "author", died = 1848 }]
+published = 1847
+status = "typesetting"
+features = ["dialect"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/emily-bronte/wuthering-heights" }
+notes = "Joseph's Yorkshire speech: elision apostrophes (’at, ’em) must stay right single quotes (TQ-L1)."
+
+[[title]]
+id = "en-shelley-frankenstein"
+title = "Frankenstein"
+lang = "en"
+creators = [{ name = "Mary Shelley", role = "author", died = 1851 }]
+published = 1818
+status = "typesetting"
+features = ["epistolary"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/mary-shelley/frankenstein" }
+
+[[title]]
+id = "en-stoker-dracula"
+title = "Dracula"
+lang = "en"
+creators = [{ name = "Bram Stoker", role = "author", died = 1912 }]
+published = 1897
+status = "typesetting"
+features = ["epistolary", "dialect"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/bram-stoker/dracula" }
+notes = "Diaries, letters, telegrams and press cuttings: each document type needs its own heading and dateline style."
+
+[[title]]
+id = "en-wilde-dorian-gray"
+title = "The Picture of Dorian Gray"
+lang = "en"
+creators = [{ name = "Oscar Wilde", role = "author", died = 1900 }]
+published = 1890
+status = "typesetting"
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/oscar-wilde/the-picture-of-dorian-gray" }
+
+[[title]]
+id = "en-melville-moby-dick"
+title = "Moby Dick"
+lang = "en"
+creators = [{ name = "Herman Melville", role = "author", died = 1891 }]
+published = 1851
+status = "typesetting"
+features = ["long", "drama", "footnotes"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/herman-melville/moby-dick" }
+notes = "Chapter 40 (Midnight, Forecastle) is set as a play; the Extracts are attributed quotations."
+
+[[title]]
+id = "en-dickens-great-expectations"
+title = "Great Expectations"
+lang = "en"
+creators = [{ name = "Charles Dickens", role = "author", died = 1870 }]
+published = 1861
+status = "typesetting"
+features = ["dialect"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/charles-dickens/great-expectations" }
+
+[[title]]
+id = "en-eliot-middlemarch"
+title = "Middlemarch"
+lang = "en"
+creators = [{ name = "George Eliot", role = "author", died = 1880 }]
+published = 1871
+status = "typesetting"
+features = ["long", "epigraphs"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/george-eliot/middlemarch" }
+notes = "Every chapter opens with a verse or prose epigraph."
+
+[[title]]
+id = "en-carroll-alice-in-wonderland"
+title = "Alice’s Adventures in Wonderland"
+lang = "en"
+creators = [
+  { name = "Lewis Carroll", role = "author", died = 1898 },
+  { name = "John Tenniel", role = "illustrator", died = 1914 },
+]
+published = 1865
+status = "typesetting"
+features = ["illustrations", "verse", "shaped-text"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/lewis-carroll/alices-adventures-in-wonderland/john-tenniel" }
+notes = "“The Mouse’s Tale” is a shaped poem: set as a fixed figure, never reflowed."
+
+[[title]]
+id = "en-doyle-sherlock-holmes-adventures"
+title = "The Adventures of Sherlock Holmes"
+lang = "en"
+creators = [{ name = "Arthur Conan Doyle", role = "author", died = 1930 }]
+published = 1892
+status = "typesetting"
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/arthur-conan-doyle/the-adventures-of-sherlock-holmes" }
+
+[[title]]
+id = "en-conrad-heart-of-darkness"
+title = "Heart of Darkness"
+lang = "en"
+creators = [{ name = "Joseph Conrad", role = "author", died = 1924 }]
+published = 1899
+status = "typesetting"
+features = ["nested-quotation"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/joseph-conrad/heart-of-darkness" }
+notes = "Marlow's narration reopens a quotation mark on every paragraph and nests dialogue inside it."
+
+[[title]]
+id = "en-fitzgerald-great-gatsby"
+title = "The Great Gatsby"
+lang = "en"
+creators = [{ name = "F. Scott Fitzgerald", role = "author", died = 1940 }]
+published = 1925
+status = "typesetting"
+features = ["epigraphs"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/f-scott-fitzgerald/the-great-gatsby" }
+
+[[title]]
+id = "en-woolf-mrs-dalloway"
+title = "Mrs. Dalloway"
+lang = "en"
+creators = [{ name = "Virginia Woolf", role = "author", died = 1941 }]
+published = 1925
+status = "typesetting"
+features = ["section-breaks"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/virginia-woolf/mrs-dalloway" }
+notes = "No chapters: the space breaks are the structure and must survive pagination (never at a page top or bottom without an ornament)."
+
+[[title]]
+id = "en-tolstoy-anna-karenina"
+title = "Anna Karenina"
+lang = "en"
+creators = [
+  { name = "Leo Tolstoy", role = "author", died = 1910 },
+  { name = "Constance Garnett", role = "translator", died = 1946 },
+]
+published = 1901
+status = "typesetting"
+features = ["long"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/leo-tolstoy/anna-karenina/constance-garnett" }
+
+[[title]]
+id = "en-dostoevsky-crime-and-punishment"
+title = "Crime and Punishment"
+lang = "en"
+creators = [
+  { name = "Fyodor Dostoevsky", role = "author", died = 1881 },
+  { name = "Constance Garnett", role = "translator", died = 1946 },
+]
+published = 1914
+status = "typesetting"
+features = ["long"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/fyodor-dostoevsky/crime-and-punishment/constance-garnett" }
+
+[[title]]
+id = "en-shakespeare-hamlet"
+title = "Hamlet"
+lang = "en"
+creators = [{ name = "William Shakespeare", role = "author", died = 1616 }]
+published = 1603
+status = "typesetting"
+features = ["drama", "verse"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/william-shakespeare/hamlet" }
+notes = "Shared verse lines (one pentameter split across speakers) are indented to continue the line."
+
+[[title]]
+id = "en-gibran-the-prophet"
+title = "The Prophet"
+lang = "en"
+creators = [{ name = "Kahlil Gibran", role = "author", died = 1931 }]
+published = 1923
+status = "typesetting"
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/kahlil-gibran/the-prophet" }
+notes = "Pairs with Gibran's Arabic titles below."
+
+[[title]]
+id = "en-khayyam-rubaiyat"
+title = "The Rubáiyát of Omar Khayyám"
+lang = "en"
+creators = [
+  { name = "Omar Khayyám", role = "author", died = 1131 },
+  { name = "Edward FitzGerald", role = "translator", died = 1883 },
+]
+published = 1859
+status = "typesetting"
+features = ["verse"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/omar-khayyam/the-rubaiyat-of-omar-khayyam/edward-fitzgerald" }
+notes = "Numbered quatrains: a quatrain never breaks across pages."
+
+[[title]]
+id = "en-aurelius-meditations"
+title = "Meditations"
+lang = "en"
+creators = [
+  { name = "Marcus Aurelius", role = "author", died = 180 },
+  { name = "George Long", role = "translator", died = 1879 },
+]
+published = 1862
+status = "typesetting"
+features = ["numbered-sections"]
+source = { kind = "standard-ebooks", url = "https://standardebooks.org/ebooks/marcus-aurelius/meditations/george-long" }
+
+# ── French: Project Gutenberg transcriptions (collate before typesetting) ──
+#
+# Gutenberg's French texts lack French spacing (TQ-F1) and often accented
+# capitals and œ/æ (TQ-F3): Candide (#4650) showed 1,309 TQ-F1 findings.
+# Spacing is restored mechanically. Accents and ligatures are restored
+# during collation.
+
+[[title]]
+id = "fr-voltaire-candide"
+title = "Candide, ou l’Optimisme"
+title_en = "Candide, or Optimism"
+lang = "fr"
+creators = [
+  { name = "Voltaire", role = "author", died = 1778 },
+  { name = "Adrien-Jean-Quentin Beuchot", role = "editor", died = 1851 },
+]
+published = 1759
+status = "collation"
+features = ["footnotes"]
+source = { kind = "gutenberg", ebook = 4650 }
+base_edition = { citation = "Œuvres de Voltaire, éd. Beuchot, t. XXXIII (Romans, t. I). Paris, Lefèvre; Werdet et Lequien fils; impr. A. Firmin Didot, 1829", year = 1829 }
+notes = "The Gutenberg text transcribes the base edition, including Beuchot's notes (signed B.) and the volume's front matter, which is cut on ingest. Collate against scans of the 1829 volume."
+
+[[title]]
+id = "fr-flaubert-madame-bovary"
+title = "Madame Bovary"
+title_en = "Madame Bovary"
+lang = "fr"
+creators = [{ name = "Gustave Flaubert", role = "author", died = 1880 }]
+published = 1857
+status = "collation"
+source = { kind = "gutenberg", ebook = 14155 }
+
+[[title]]
+id = "fr-stendhal-le-rouge-et-le-noir"
+title = "Le Rouge et le Noir"
+title_en = "The Red and the Black"
+lang = "fr"
+creators = [{ name = "Stendhal", role = "author", died = 1842 }]
+published = 1830
+status = "collation"
+features = ["long", "epigraphs"]
+source = { kind = "gutenberg", ebook = 798 }
+
+[[title]]
+id = "fr-hugo-notre-dame-de-paris"
+title = "Notre-Dame de Paris"
+title_en = "The Hunchback of Notre-Dame"
+lang = "fr"
+creators = [{ name = "Victor Hugo", role = "author", died = 1885 }]
+published = 1831
+status = "collation"
+features = ["long"]
+source = { kind = "gutenberg", ebook = 19657 }
+
+[[title]]
+id = "fr-balzac-eugenie-grandet"
+title = "Eugénie Grandet"
+title_en = "Eugénie Grandet"
+lang = "fr"
+creators = [{ name = "Honoré de Balzac", role = "author", died = 1850 }]
+published = 1833
+status = "collation"
+source = { kind = "gutenberg", ebook = 11049 }
+
+[[title]]
+id = "fr-zola-germinal"
+title = "Germinal"
+title_en = "Germinal"
+lang = "fr"
+creators = [{ name = "Émile Zola", role = "author", died = 1902 }]
+published = 1885
+status = "collation"
+features = ["long", "dialect"]
+source = { kind = "gutenberg", ebook = 5711 }
+
+[[title]]
+id = "fr-dumas-les-trois-mousquetaires"
+title = "Les Trois Mousquetaires"
+title_en = "The Three Musketeers"
+lang = "fr"
+creators = [
+  { name = "Alexandre Dumas", role = "author", died = 1870 },
+  { name = "Auguste Maquet", role = "author", died = 1888 },
+]
+published = 1844
+status = "collation"
+features = ["long"]
+source = { kind = "gutenberg", ebook = 13951 }
+
+[[title]]
+id = "fr-verne-le-tour-du-monde"
+title = "Le Tour du monde en quatre-vingts jours"
+title_en = "Around the World in Eighty Days"
+lang = "fr"
+creators = [{ name = "Jules Verne", role = "author", died = 1905 }]
+published = 1872
+status = "collation"
+source = { kind = "gutenberg", ebook = 800 }
+
+[[title]]
+id = "fr-baudelaire-les-fleurs-du-mal"
+title = "Les Fleurs du mal"
+title_en = "The Flowers of Evil"
+lang = "fr"
+creators = [{ name = "Charles Baudelaire", role = "author", died = 1867 }]
+published = 1857
+status = "collation"
+features = ["verse"]
+source = { kind = "gutenberg", ebook = 6099 }
+
+[[title]]
+id = "fr-rostand-cyrano-de-bergerac"
+title = "Cyrano de Bergerac"
+title_en = "Cyrano de Bergerac"
+lang = "fr"
+creators = [{ name = "Edmond Rostand", role = "author", died = 1918 }]
+published = 1898
+status = "collation"
+features = ["drama", "verse"]
+source = { kind = "gutenberg", ebook = 1256 }
+notes = "Alexandrines split across speakers (vers brisés) continue at the column where the previous half ended."
+
+[[title]]
+id = "fr-proust-du-cote-de-chez-swann"
+title = "Du côté de chez Swann"
+title_en = "Swann’s Way"
+lang = "fr"
+creators = [{ name = "Marcel Proust", role = "author", died = 1922 }]
+published = 1913
+status = "collation"
+features = ["long", "long-paragraphs"]
+source = { kind = "gutenberg", ebook = 2650 }
+notes = "Paragraphs of up to ~1,800 words (Gutenberg #2650): the Compositor's worst case for reflow time and anchor density."
+
+[[title]]
+id = "fr-colette-cheri"
+title = "Chéri"
+title_en = "Chéri"
+lang = "fr"
+creators = [{ name = "Colette", role = "author", died = 1954 }]
+published = 1920
+status = "collation"
+source = { kind = "gutenberg", ebook = 6484 }
+notes = "Public domain in the EU since 1 January 2025: the most recent author on the list."
+
+# ── Arabic: Wikisource transcriptions (collate against a public-domain print) ──
+#
+# Arabic Wikisource rarely names its base edition, and some of its texts come
+# from modern critical editions. A text is typeset only after collation
+# against a print edition that is itself out of copyright (base_edition).
+
+[[title]]
+id = "ar-ibn-al-muqaffa-kalila-wa-dimna"
+title = "كليلة ودمنة"
+title_en = "Kalila and Dimna"
+lang = "ar"
+creators = [{ name = "ابن المقفع", name_en = "Ibn al-Muqaffaʿ", role = "author", died = 759 }]
+published = 750
+status = "collation"
+source = { kind = "wikisource", wiki = "ar", page = "كليلة ودمنة" }
+notes = "15 chapters on Wikisource. The Ring-Dove chapter is the Arabic golden page."
+
+[[title]]
+id = "ar-ibn-hazm-tawq-al-hamama"
+title = "طوق الحمامة"
+title_en = "The Ring of the Dove"
+lang = "ar"
+creators = [{ name = "ابن حزم", name_en = "Ibn Ḥazm", role = "author", died = 1064 }]
+published = 1022
+status = "collation"
+features = ["verse-hemistich"]
+source = { kind = "wikisource", wiki = "ar", page = "طوق الحمامة" }
+notes = "Prose chapters with frequent inline verse."
+
+[[title]]
+id = "ar-ibn-tufayl-hayy-ibn-yaqzan"
+title = "حي بن يقظان"
+title_en = "Hayy ibn Yaqzan"
+lang = "ar"
+creators = [{ name = "ابن طفيل", name_en = "Ibn Ṭufayl", role = "author", died = 1185 }]
+published = 1170
+status = "collation"
+source = { kind = "wikisource", wiki = "ar", page = "حي بن يقظان" }
+
+[[title]]
+id = "ar-jahiz-al-bukhala"
+title = "البخلاء"
+title_en = "The Book of Misers"
+lang = "ar"
+creators = [{ name = "الجاحظ", name_en = "al-Jāḥiẓ", role = "author", died = 869 }]
+published = 850
+status = "sourcing"
+features = ["verse-hemistich"]
+source = { kind = "wikisource", wiki = "ar", page = "البخلاء" }
+notes = "Wikisource has the introduction only; its chapters are unwritten, and the page cites al-maktaba.org (a modern edition) as its source. Transcribe from a public-domain print."
+
+[[title]]
+id = "ar-hamadhani-maqamat"
+title = "مقامات بديع الزمان الهمذاني"
+title_en = "The Maqamat of Badiʿ al-Zaman al-Hamadhani"
+lang = "ar"
+creators = [{ name = "بديع الزمان الهمذاني", name_en = "Badīʿ al-Zamān al-Hamadhānī", role = "author", died = 1008 }]
+published = 1000
+status = "collation"
+features = ["verse-hemistich", "vocalized"]
+source = { kind = "wikisource", wiki = "ar", page = "مقامات بديع الزمان الهمذاني" }
+notes = "About 50 maqamat, one page each. Rhymed prose (sajʿ) with embedded verse."
+
+[[title]]
+id = "ar-hariri-maqamat"
+title = "مقامات الحريري"
+title_en = "The Maqamat of al-Hariri"
+lang = "ar"
+creators = [{ name = "الحريري", name_en = "al-Ḥarīrī", role = "author", died = 1122 }]
+published = 1110
+status = "collation"
+features = ["verse-hemistich", "vocalized"]
+source = { kind = "wikisource", wiki = "ar", page = "مقامات الحريري" }
+notes = "Wikisource lists printed editions from 1822 to 1929; the earliest are base-edition candidates."
+
+[[title]]
+id = "ar-ibn-khaldun-muqaddima"
+title = "مقدمة ابن خلدون"
+title_en = "The Muqaddimah"
+lang = "ar"
+creators = [{ name = "ابن خلدون", name_en = "Ibn Khaldūn", role = "author", died = 1406 }]
+published = 1377
+status = "collation"
+features = ["long"]
+source = { kind = "wikisource", wiki = "ar", page = "مقدمة ابن خلدون" }
+
+[[title]]
+id = "ar-ibn-battuta-rihla"
+title = "تحفة النظار في غرائب الأمصار وعجائب الأسفار"
+title_en = "The Travels of Ibn Battuta"
+lang = "ar"
+creators = [
+  { name = "ابن بطوطة", name_en = "Ibn Baṭṭūṭa", role = "author", died = 1369 },
+  { name = "ابن جزي الكلبي", name_en = "Ibn Juzayy al-Kalbī", role = "editor", died = 1357 },
+]
+published = 1355
+status = "collation"
+features = ["long"]
+source = { kind = "wikisource", wiki = "ar", page = "تحفة النظار في غرائب الأمصار وعجائب الأسفار" }
+
+[[title]]
+id = "ar-mutanabbi-selected-poems"
+title = "مختارات من شعر المتنبي"
+title_en = "Selected Poems of al-Mutanabbi"
+lang = "ar"
+creators = [{ name = "المتنبي", name_en = "al-Mutanabbī", role = "author", died = 965 }]
+published = 960
+status = "sourcing"
+features = ["verse-hemistich", "vocalized"]
+source = { kind = "wikisource", wiki = "ar", page = "مؤلف:المتنبي" }
+notes = "Over 300 poems on Wikisource, one page each and indexed by rhyme letter. The selection is an editorial decision still to be made."
+
+[[title]]
+id = "ar-al-muallaqat"
+title = "المعلقات"
+title_en = "The Muʿallaqat"
+lang = "ar"
+creators = [
+  { name = "امرؤ القيس", name_en = "Imruʾ al-Qays", role = "author", died = 544 },
+  { name = "طرفة بن العبد", name_en = "Ṭarafa ibn al-ʿAbd", role = "author", died = 569 },
+  { name = "زهير بن أبي سلمى", name_en = "Zuhayr ibn Abī Sulmā", role = "author", died = 609 },
+  { name = "لبيد بن ربيعة", name_en = "Labīd ibn Rabīʿa", role = "author", died = 661 },
+  { name = "عمرو بن كلثوم", name_en = "ʿAmr ibn Kulthūm", role = "author", died = 584 },
+  { name = "عنترة بن شداد", name_en = "ʿAntara ibn Shaddād", role = "author", died = 608 },
+  { name = "الحارث بن حلزة", name_en = "al-Ḥārith ibn Ḥilliza", role = "author", died = 570 },
+  { name = "الأعشى", name_en = "al-Aʿshā", role = "author", died = 629 },
+  { name = "النابغة الذبياني", name_en = "al-Nābigha al-Dhubyānī", role = "author", died = 604 },
+  { name = "عبيد بن الأبرص", name_en = "ʿAbīd ibn al-Abraṣ", role = "author", died = 554 },
+]
+published = 600
+status = "collation"
+features = ["verse-hemistich", "vocalized"]
+source = { kind = "wikisource", wiki = "ar", page = "المعلقات" }
+notes = "The ten-poem canon as Wikisource lists it. Death years are approximate."
+
+[[title]]
+id = "ar-alf-layla-sindbad"
+title = "السندباد البحري"
+title_en = "Sindbad the Sailor (from the Thousand and One Nights)"
+lang = "ar"
+anonymous = true
+published = 1835
+status = "collation"
+source = { kind = "wikisource", wiki = "ar", page = "ألف ليلة وليلة/السندباد البحري" }
+notes = "Wikisource marks its Alf Layla wa-Layla 25% complete; the Sindbad cycle has its own page. published = the Būlāq printing, the base edition to collate against."
+
+[[title]]
+id = "ar-ghazali-al-munqidh"
+title = "المنقذ من الضلال"
+title_en = "Deliverance from Error"
+lang = "ar"
+creators = [{ name = "أبو حامد الغزالي", name_en = "Abū Ḥāmid al-Ghazālī", role = "author", died = 1111 }]
+published = 1108
+status = "collation"
+source = { kind = "wikisource", wiki = "ar", page = "المنقذ من الضلال" }
+
+[[title]]
+id = "ar-maarri-risalat-al-ghufran"
+title = "رسالة الغفران"
+title_en = "The Epistle of Forgiveness"
+lang = "ar"
+creators = [{ name = "أبو العلاء المعري", name_en = "Abū al-ʿAlāʾ al-Maʿarrī", role = "author", died = 1057 }]
+published = 1033
+status = "collation"
+features = ["verse-hemistich", "vocalized"]
+source = { kind = "wikisource", wiki = "ar", page = "رسالة الغفران" }
+
+[[title]]
+id = "ar-gibran-al-ajniha-al-mutakassira"
+title = "الأجنحة المتكسرة"
+title_en = "The Broken Wings"
+lang = "ar"
+creators = [{ name = "جبران خليل جبران", name_en = "Kahlil Gibran", role = "author", died = 1931 }]
+published = 1912
+status = "collation"
+source = { kind = "wikisource", wiki = "ar", page = "الأجنحة المتكسرة" }
+
+[[title]]
+id = "ar-gibran-damaa-wa-ibtisama"
+title = "دمعة وابتسامة"
+title_en = "A Tear and a Smile"
+lang = "ar"
+creators = [{ name = "جبران خليل جبران", name_en = "Kahlil Gibran", role = "author", died = 1931 }]
+published = 1914
+status = "collation"
+source = { kind = "wikisource", wiki = "ar", page = "دمعة وابتسامة (1914)" }
+
+[[title]]
+id = "ar-manfaluti-al-nazarat"
+title = "النظرات"
+title_en = "Views"
+lang = "ar"
+creators = [{ name = "مصطفى لطفي المنفلوطي", name_en = "Muṣṭafā Luṭfī al-Manfalūṭī", role = "author", died = 1924 }]
+published = 1910
+status = "sourcing"
+source = { kind = "wikisource", wiki = "ar", page = "النظرات" }
+notes = "Three volumes of essays (138 in all); Wikisource's transcription from scans is marked incomplete. Proofread the remaining scan pages."
+
+[[title]]
+id = "ar-kawakibi-tabai-al-istibdad"
+title = "طبائع الاستبداد ومصارع الاستعباد"
+title_en = "The Nature of Despotism"
+lang = "ar"
+creators = [{ name = "عبد الرحمن الكواكبي", name_en = "ʿAbd al-Raḥmān al-Kawākibī", role = "author", died = 1902 }]
+published = 1902
+status = "collation"
+source = { kind = "wikisource", wiki = "ar", page = "طبائع الاستبداد ومصارع الاستعباد" }
+
+[[title]]
+id = "ar-shawqi-masraa-kliyubatra"
+title = "مصرع كليوباترا"
+title_en = "The Death of Cleopatra"
+lang = "ar"
+creators = [{ name = "أحمد شوقي", name_en = "Aḥmad Shawqī", role = "author", died = 1932 }]
+published = 1929
+status = "sourcing"
+features = ["drama", "verse-hemistich", "vocalized"]
+source = { kind = "wikisource", wiki = "ar", page = "مصرع كليوباترا" }
+notes = "Wikisource has an introduction and one scene (مقتطف). Transcribe the full play from a printing of 1930 or earlier."

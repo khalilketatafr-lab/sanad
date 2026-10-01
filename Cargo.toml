@@ -29,6 +29,7 @@ sanad-tokens = { path = "crates/tokens" }
 flatbuffers = "=25.12.19"          # MUST equal the pinned flatc version (tools/flatc.version)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "1"
 base64 = "0.22"
 thiserror = "2"
 
@@ -63,6 +64,7 @@ fdsm-ttf-parser = "0.2"
 nalgebra = "0.34"                  # = fdsm's (shape transforms)
 image = { version = "0.25", default-features = false }
 unicode-bidi = "0.3"
+unicode-normalization = "0.1"
 hyphenation = { version = "0.8", features = ["embed_en-us"] }
 rand_chacha = "0.9"
 rand_core = "0.9"

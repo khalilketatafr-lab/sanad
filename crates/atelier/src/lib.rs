@@ -11,9 +11,11 @@
 //! and shredded (P1).
 
 pub mod atlas;
+pub mod catalog;
 pub mod msdf;
 pub mod page;
 pub mod permute;
+pub mod qa;
 pub mod script;
 pub mod shape;
 pub mod shred;
