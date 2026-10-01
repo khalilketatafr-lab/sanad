@@ -1,0 +1,21 @@
+{
+  "name": "sanad",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.18.0",
+    "pnpm": ">=10.28.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "p1": "turbo run p1",
+    "p1:selftest": "pnpm --filter @sanad/p1-harness run selftest"
+  },
+  "devDependencies": {
+    "turbo": "2.11.6",
+    "typescript": "catalog:"
+  }
+}

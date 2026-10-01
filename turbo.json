@@ -1,0 +1,31 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  "globalDependencies": ["tsconfig.base.json", "rust-toolchain.toml"],
+  "globalEnv": ["NODE_ENV"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
+      "outputs": ["dist/**", "build/**", "pkg/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@sanad/p1-harness#p1": {
+      "dependsOn": ["@sanad/reader#build"],
+      "inputs": ["$TURBO_DEFAULT$", "../../fixtures/canary/**"],
+      "outputs": ["out/**"],
+      "cache": false
+    },
+    "@sanad/p1-harness#selftest": {
+      "outputs": ["out/**"],
+      "cache": false
+    }
+  }
+}

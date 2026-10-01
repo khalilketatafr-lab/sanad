@@ -1,0 +1,23 @@
+# deps & build output
+node_modules/
+dist/
+target/
+.turbo/
+*.tsbuildinfo
+coverage/
+
+# generated (rebuilt in CI; never committed)
+packages/tokens/build/
+packages/lumen-wasm/pkg/
+crates/folio/fuzz/artifacts/
+crates/folio/fuzz/corpus/
+crates/folio/fuzz/coverage/
+
+# P1 harness output (may contain canary hits; never commit)
+tools/p1-harness/out/
+
+# local
+.env
+.env.*
+!.env.example
+.DS_Store

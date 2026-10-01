@@ -1,0 +1,11 @@
+{
+  "$comment": "Paths are relative to this file. See README.md for the meaning of each layer.",
+  "canaries": "../../fixtures/canary/canaries.json",
+  "dist": ["../../apps/reader/dist"],
+  "routes": ["/", "/read/00000000-0000-7000-8000-00000000ca7a"],
+  "readyMark": "lumen:ready",
+  "readyTimeoutMs": 20000,
+  "settleMs": 1500,
+  "procMem": "auto",
+  "out": "out"
+}

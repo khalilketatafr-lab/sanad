@@ -1,0 +1,13 @@
+[package]
+name = "sanad-compositor"
+description = "Compositor: line breaking, justification, bidi and pagination over glyph IDs (native + wasm)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

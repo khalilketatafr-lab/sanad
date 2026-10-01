@@ -1,0 +1,86 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/folio",
+    "crates/compositor",
+    "crates/kernel",
+    "crates/atelier",
+]
+# cargo-fuzz targets build with nightly + sanitizers in their own workspace.
+exclude = ["crates/folio/fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "UNLICENSED"
+publish = false
+repository = "https://github.com/khalilketatafr-lab/sanad"
+
+[workspace.dependencies]
+# internal
+sanad-folio = { path = "crates/folio" }
+sanad-compositor = { path = "crates/compositor" }
+sanad-atelier = { path = "crates/atelier" }
+
+# format & serialization
+flatbuffers = "=25.12.19"          # MUST equal the pinned flatc version (tools/flatc.version)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+thiserror = "2"
+
+# crypto: one stack (aws-lc-rs) for every native path; WebCrypto on the client
+aws-lc-rs = "1"
+zeroize = { version = "1", features = ["derive"] }
+
+# kernel runtime
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "sync"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "limit", "request-id", "timeout"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+pasetors = { version = "0.7", default-features = false, features = ["std", "v4"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+url = "2"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time", "macros", "migrate"] }
+
+# wasm
+wasm-bindgen = "=0.2.104"           # MUST equal the wasm-bindgen-cli version used in CI
+js-sys = "=0.3.81"
+
+# testing
+proptest = "1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+similar_names = "allow"
+must_use_candidate = "allow"
+unwrap_used = "deny"
+expect_used = "warn"
+dbg_macro = "deny"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# Compositor ships to the browser: optimize for speed, keep it small via LTO.
+[profile.release.package.sanad-compositor]
+opt-level = 3

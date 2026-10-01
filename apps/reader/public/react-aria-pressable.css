@@ -1,0 +1,13 @@
+/*
+ * Pre-provides the rule React Aria's usePress would otherwise inject as an
+ * inline <style> (blocked by our CSP: style-src 'self'). React Aria skips its
+ * injection when an element with id="react-aria-pressable-style" exists, which
+ * is the <link> in index.html that loads this file. Keep in sync with
+ * react-aria/dist/private/interactions/usePress (the P1 harness fails the
+ * build on any CSP violation, so drift cannot ship silently).
+ */
+@layer {
+  [data-react-aria-pressable] {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+}

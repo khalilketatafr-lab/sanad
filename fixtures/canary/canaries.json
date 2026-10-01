@@ -1,0 +1,28 @@
+{
+  "$comment": "P1 canaries. These phrases exist ONLY in server-side fixtures (fixtures/books/*). If any of them, or any 4-word shingle of them, is ever observed on the client (built assets, DOM, accessibility tree, JS heap, process memory, storage, or network), P1 is violated and CI fails. Never use these strings anywhere else in the codebase.",
+  "version": 1,
+  "shingleWords": 4,
+  "minShingleChars": 18,
+  "phrases": [
+    {
+      "id": "latin-en",
+      "lang": "en",
+      "text": "Quillwort herons count seven silver lanterns beneath the drowned clocktower at dusk"
+    },
+    {
+      "id": "latin-fr",
+      "lang": "fr",
+      "text": "Les hérons de Quillwort comptent sept lanternes d’argent sous l’horloge engloutie"
+    },
+    {
+      "id": "arabic",
+      "lang": "ar",
+      "text": "يعدُّ مالكُ الحزينِ سبعَ فوانيسَ فضّيةٍ تحتَ برجِ الساعةِ الغارقِ عندَ الغسقِ"
+    },
+    {
+      "id": "mixed-bidi",
+      "lang": "ar",
+      "text": "قال الراوي إنّ Quillwort-7F3A ليست جزيرةً بل ساعةٌ رمليةٌ من الضوء"
+    }
+  ]
+}

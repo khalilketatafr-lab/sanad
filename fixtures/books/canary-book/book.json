@@ -1,0 +1,12 @@
+{
+  "edition": "00000000-0000-7000-8000-00000000ca7a",
+  "title": "The Canary Edition",
+  "blocks": [
+    { "kind": "heading", "dir": "ltr", "text": "Chapter One" },
+    { "kind": "paragraph", "dir": "ltr", "text": "The town kept its own counsel. Quillwort herons count seven silver lanterns beneath the drowned clocktower at dusk, and nobody thinks to ask why." },
+    { "kind": "paragraph", "dir": "ltr", "text": "Les hérons de Quillwort comptent sept lanternes d’argent sous l’horloge engloutie, disait la vieille carte." },
+    { "kind": "heading", "dir": "rtl", "text": "الفصل الأول" },
+    { "kind": "paragraph", "dir": "rtl", "text": "يعدُّ مالكُ الحزينِ سبعَ فوانيسَ فضّيةٍ تحتَ برجِ الساعةِ الغارقِ عندَ الغسقِ، ولا يسأل أحدٌ عن السبب." },
+    { "kind": "paragraph", "dir": "rtl", "text": "قال الراوي إنّ Quillwort-7F3A ليست جزيرةً بل ساعةٌ رمليةٌ من الضوء." }
+  ]
+}

@@ -1,0 +1,102 @@
+/* Placeholder palette until @sanad/tokens (D6) is wired in; values = Paper theme. */
+:root {
+  color-scheme: light dark;
+  --paper: #fbfaf7;
+  --ink: #1d1c1a;
+  --ink-2: #5e5a53;
+  --accent: #2f5d8a;
+  --focus-ring: 0 0 0 3px rgb(47 93 138 / 0.45);
+  font-family: Inter, "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.reader {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100dvh;
+}
+
+.reader__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 8px;
+  padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+}
+
+.reader__title {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader__button {
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.reader__button[data-focus-visible] {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.reader__surface {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sr-only:not(:focus-visible) {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media print {
+  .reader {
+    display: none;
+  }
+  body::after {
+    content: "Printing isn’t available for this book. Use quote cards to share passages.";
+    display: block;
+    padding: 48px;
+    font-size: 18px;
+  }
+}

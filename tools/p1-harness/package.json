@@ -1,0 +1,23 @@
+{
+  "name": "@sanad/p1-harness",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "P1 enforcement: fails CI if protected-text canaries ever reach the client.",
+  "bin": {
+    "p1-harness": "./src/cli.ts"
+  },
+  "scripts": {
+    "p1": "node src/cli.ts scan --config p1.config.json",
+    "selftest": "node src/cli.ts selftest",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test src/*.test.ts"
+  },
+  "dependencies": {
+    "playwright": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
