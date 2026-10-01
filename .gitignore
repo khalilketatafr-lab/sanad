@@ -15,6 +15,7 @@ crates/folio/fuzz/coverage/
 
 # P1 harness output (may contain canary hits; never commit)
 tools/p1-harness/out/
+packages/lumen/test/out/
 
 # local
 .env

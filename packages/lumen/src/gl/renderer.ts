@@ -96,7 +96,7 @@ export class LumenRenderer {
     gl.vertexAttribPointer(0, 4, gl.FLOAT, false, s, GLYPH_INSTANCE.rectOffset);
     gl.vertexAttribDivisor(0, 1);
     gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 4, gl.FLOAT, false, s, GLYPH_INSTANCE.uvOffset);
+    gl.vertexAttribPointer(1, 4, gl.FLOAT, false, s, GLYPH_INSTANCE.slotOffset);
     gl.vertexAttribDivisor(1, 1);
     gl.enableVertexAttribArray(2);
     gl.vertexAttribIPointer(2, 1, gl.UNSIGNED_INT, s, GLYPH_INSTANCE.roleOffset);
@@ -147,10 +147,11 @@ export class LumenRenderer {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, atlas.width, atlas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, atlas.data);
-    // MSDF requires bilinear reconstruction of the distance field, never mipmaps
-    // (minified MSDF is handled by screenPxRange, not by prefiltering).
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    // Pass 1 reconstructs the field itself (texelFetch + bilinear in the
+    // shader, see COVERAGE_FRAG), so the sampler never filters. No mipmaps:
+    // minified MSDF is handled by screenPxRange, not by prefiltering.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindTexture(gl.TEXTURE_2D, null);

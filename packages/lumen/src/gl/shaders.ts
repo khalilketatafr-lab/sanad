@@ -28,8 +28,8 @@ export const DIST_RANGE_PX = 4.0;
 export const GLYPH_INSTANCE = {
   /** a_rect: page-space quad x, y, w, h (plane bounds incl. distance padding). */
   rectOffset: 0,
-  /** a_uv: atlas rect u0, v0, u1, v1 (normalized). */
-  uvOffset: 16,
+  /** a_slot: atlas slot x, y, w, h in texels (all fragments of a glyph share w, h). */
+  slotOffset: 16,
   /** a_role: 0 ink · 1 ink2 · 2 accent · 3 highlight underlay. */
   roleOffset: 32,
   /** a_highlight: highlight color index 1–4 (role 3 only). */
@@ -44,14 +44,15 @@ precision highp float;
 precision highp int;
 
 layout(location = 0) in vec4 a_rect;
-layout(location = 1) in vec4 a_uv;
+layout(location = 1) in vec4 a_slot;
 layout(location = 2) in uint a_role;
 layout(location = 3) in float a_highlight;
 
 // Page space (points) → clip space. Zoom and pan only ever change this.
 uniform mat3 u_camera;
 
-out vec2 v_uv;
+out vec2 v_local;            // slot-local texel coordinates, 0 … slot size
+flat out vec4 v_slot;
 flat out uint v_role;
 flat out float v_highlight;
 
@@ -59,7 +60,10 @@ void main() {
   // TRIANGLE_STRIP corners from gl_VertexID: (0,0) (1,0) (0,1) (1,1). No vertex buffer.
   vec2 corner = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1));
   vec2 p = a_rect.xy + corner * a_rect.zw;
-  v_uv = mix(a_uv.xy, a_uv.zw, corner);
+  // Slot-LOCAL coordinates: every fragment of a glyph has the same rect and
+  // slot size, so it interpolates bit-identical values wherever its slot is.
+  v_local = corner * a_slot.zw;
+  v_slot = a_slot;
   v_role = a_role;
   v_highlight = a_highlight;
   vec3 clip = u_camera * vec3(p, 1.0);
@@ -71,11 +75,12 @@ export const COVERAGE_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 precision highp int;
 
-in vec2 v_uv;
+in vec2 v_local;
+flat in vec4 v_slot;
 flat in uint v_role;
 flat in float v_highlight;
 
-uniform sampler2D u_atlas;     // shredded MSDF fragments (RGB distance, LINEAR filter)
+uniform sampler2D u_atlas;     // shredded MSDF fragments (RGB distance); texelFetch only
 uniform float u_pxRange;       // distance range baked into the atlas, in atlas texels
 uniform float u_distRangePx;   // encoding range in screen px (DIST_RANGE_PX)
 
@@ -83,6 +88,31 @@ out vec4 o_enc;
 
 float median3(vec3 v) {
   return max(min(v.r, v.g), min(max(v.r, v.g), v.b));
+}
+
+// Bilinear reconstruction done here, not by the sampler, from slot-local
+// coordinates and clamped to the slot:
+// - the weights depend only on v_local, so every fragment of a glyph is
+//   sampled at exactly the same sub-texel position whatever its place in the
+//   atlas, and the MAX union is exact on any GPU (hardware filtering rounds
+//   absolute texel coordinates, so fragments in different slots would differ
+//   in the last bit, and 1 LSB of Pass 1 shows at dark ink edges);
+// - the footprint never leaves the slot, so neighboring slots cannot bleed in;
+// - weights are full float, not the 8-bit sub-texel weights of fixed-function
+//   filtering.
+vec3 sampleSlot() {
+  vec2 p = v_local - 0.5;
+  vec2 cell = floor(p);
+  vec2 f = p - cell;
+  ivec2 lo = ivec2(v_slot.xy);
+  ivec2 hi = lo + ivec2(v_slot.zw) - 1;
+  ivec2 a = clamp(lo + ivec2(cell), lo, hi);
+  ivec2 b = clamp(lo + ivec2(cell) + 1, lo, hi);
+  vec3 t00 = texelFetch(u_atlas, a, 0).rgb;
+  vec3 t10 = texelFetch(u_atlas, ivec2(b.x, a.y), 0).rgb;
+  vec3 t01 = texelFetch(u_atlas, ivec2(a.x, b.y), 0).rgb;
+  vec3 t11 = texelFetch(u_atlas, b, 0).rgb;
+  return mix(mix(t00, t10, f.x), mix(t01, t11, f.x), f.y);
 }
 
 void main() {
@@ -93,11 +123,10 @@ void main() {
   }
   // Screen-space pixel range of the distance field (msdfgen's formulation):
   // how many screen pixels one unit of normalized distance spans here.
-  vec2 unitRange = vec2(u_pxRange) / vec2(textureSize(u_atlas, 0));
-  vec2 screenTexSize = vec2(1.0) / fwidth(v_uv);
-  float screenPxRange = max(0.5 * dot(unitRange, screenTexSize), 1.0);
+  vec2 texelsPerPx = max(fwidth(v_local), vec2(1e-6));
+  float screenPxRange = max(0.5 * u_pxRange * (1.0 / texelsPerPx.x + 1.0 / texelsPerPx.y), 1.0);
 
-  float sdPx = (median3(texture(u_atlas, v_uv).rgb) - 0.5) * screenPxRange;
+  float sdPx = (median3(sampleSlot()) - 0.5) * screenPxRange;
   float enc = clamp(sdPx / u_distRangePx + 0.5, 0.0, 1.0);
 
   // Route to the role's channel. Every other channel gets 0 (= far outside),

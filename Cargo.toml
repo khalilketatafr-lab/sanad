@@ -54,6 +54,18 @@ url = "2"
 # TLS via rustls on aws-lc-rs: one crypto stack in the Kernel.
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "postgres", "uuid", "time", "json", "migrate", "macros"] }
 
+# typesetting (Atelier, server-side only: never shipped to the client)
+rustybuzz = "0.20"
+ttf-parser = "0.25"
+fdsm = "0.8"
+fdsm-ttf-parser = "0.2"
+nalgebra = "0.34"                  # = fdsm's (shape transforms)
+image = { version = "0.25", default-features = false }
+unicode-bidi = "0.3"
+hyphenation = { version = "0.8", features = ["embed_en-us"] }
+rand_chacha = "0.9"
+rand_core = "0.9"
+
 # wasm
 wasm-bindgen = "=0.2.129"           # MUST equal the wasm-bindgen-cli version used in CI
 js-sys = "=0.3.106"
@@ -83,6 +95,17 @@ doc_markdown = "allow"
 unwrap_used = "deny"
 expect_used = "warn"
 dbg_macro = "deny"
+
+# Atelier's MSDF generation and shaping are per-texel / per-glyph math:
+# optimize them even in dev builds so tests and golden pages stay fast.
+[profile.dev.package.fdsm]
+opt-level = 3
+[profile.dev.package.nalgebra]
+opt-level = 3
+[profile.dev.package.rustybuzz]
+opt-level = 3
+[profile.dev.package.ttf-parser]
+opt-level = 3
 
 [profile.release]
 lto = "fat"

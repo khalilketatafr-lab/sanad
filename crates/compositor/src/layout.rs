@@ -22,8 +22,10 @@ pub struct PositionedGlyph {
     pub index: u32,
     /// Permuted glyph id to draw.
     pub gid: u16,
-    /// Pen position (line-relative device px).
+    /// Draw position (line-relative device px): pen plus the glyph's x offset.
     pub x: f32,
+    /// Vertical displacement from the baseline (device px, positive up).
+    pub y: f32,
     /// Horizontal scale (1 except for kashida).
     pub scale_x: f32,
 }
@@ -94,6 +96,7 @@ fn special_glyph(kind: GlyphKind, g: GlyphRef, gid: u16, scale_x: f32) -> Positi
         index: g.index,
         gid,
         x: 0.0,
+        y: 0.0,
         scale_x,
     }
 }
@@ -177,6 +180,11 @@ fn line_units(
 }
 
 /// Applies L2 and assigns x positions, left to right.
+///
+/// L2 reverses everything at odd levels, including the glyphs *inside* an RTL
+/// cluster (base letter, then its marks, in logical order). Shapers position
+/// marks relative to the pen in that visual order, so drawing an RTL cluster's
+/// glyphs in logical order would displace every mark by its base's advance.
 fn place_units(
     runs: &[RunView<'_>],
     units: &[Unit],
@@ -189,12 +197,22 @@ fn place_units(
     for &ui in &visual_order(&levels) {
         let u = &units[ui];
         let mut pen = x;
-        for g in &u.glyphs {
-            glyphs.push(PositionedGlyph { x: pen, ..*g });
+        let count = u.glyphs.len();
+        let rtl = u.level % 2 == 1;
+        for step in 0..count {
+            let g = &u.glyphs[if rtl { count - 1 - step } else { step }];
             if g.kind == GlyphKind::Glyph {
                 let run = &runs[usize::from(g.run)];
-                pen +=
-                    f32::from(run.advances.get(g.index as usize).copied().unwrap_or(0)) * run.scale;
+                let i = g.index as usize;
+                let [dx, dy] = run.offsets.get(i).copied().unwrap_or([0, 0]);
+                glyphs.push(PositionedGlyph {
+                    x: pen + f32::from(dx) * run.scale,
+                    y: f32::from(dy) * run.scale,
+                    ..*g
+                });
+                pen += f32::from(run.advances.get(i).copied().unwrap_or(0)) * run.scale;
+            } else {
+                glyphs.push(PositionedGlyph { x: pen, ..*g });
             }
         }
         if let Some(cluster) = u.cluster {
@@ -209,6 +227,15 @@ fn place_units(
     (glyphs, clusters)
 }
 
+/// A paragraph's measure: line width and first-line indent (device px).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Measure {
+    pub width: f32,
+    /// Indent of the first line, at the paragraph's start edge (left in LTR,
+    /// right in RTL).
+    pub first_indent: f32,
+}
+
 /// Lays out one paragraph at constant measure `width`. `base_level` is the
 /// paragraph direction (0 LTR, 1 RTL); RTL last lines align right.
 #[must_use]
@@ -219,20 +246,53 @@ pub fn layout_paragraph(
     item_params: &ItemParams,
     break_params: &BreakParams,
 ) -> ParagraphLayout {
+    let measure = Measure {
+        width,
+        first_indent: 0.0,
+    };
+    layout_paragraph_with(runs, measure, base_level, item_params, break_params)
+}
+
+/// [`layout_paragraph`] with a first-line indent.
+#[must_use]
+pub fn layout_paragraph_with(
+    runs: &[RunView<'_>],
+    measure: Measure,
+    base_level: u8,
+    item_params: &ItemParams,
+    break_params: &BreakParams,
+) -> ParagraphLayout {
+    let indent = measure.first_indent.clamp(0.0, measure.width);
     let items = build_items(runs, item_params);
-    let para: Paragraph = break_paragraph(&items, &|_| width, break_params);
+    let widths = |line: usize| {
+        if line == 0 {
+            measure.width - indent
+        } else {
+            measure.width
+        }
+    };
+    let para: Paragraph = break_paragraph(&items, &widths, break_params);
     let clusters = cluster_ordinals(runs);
+    let rtl = base_level % 2 == 1;
     let lines = para
         .lines
         .iter()
-        .map(|line| {
+        .enumerate()
+        .map(|(n, line)| {
             let units = line_units(runs, &items, &justify(&items, line), &clusters);
             let advance: f32 = units.iter().map(|u| u.width).sum();
-            // Ragged last line: align to the paragraph's start edge.
-            let start_x = if line.last && base_level % 2 == 1 {
-                (width - advance).max(0.0)
-            } else {
-                0.0
+            // The line occupies [indent, width) in LTR and [0, width − indent)
+            // in RTL; a ragged last line hugs the paragraph's start edge.
+            let start_x = match (rtl, line.last) {
+                (false, _) => {
+                    if n == 0 {
+                        indent
+                    } else {
+                        0.0
+                    }
+                }
+                (true, true) => (line.width - advance).max(0.0),
+                (true, false) => 0.0,
             };
             let (glyphs, clusters) = place_units(runs, &units, start_x);
             LineLayout {

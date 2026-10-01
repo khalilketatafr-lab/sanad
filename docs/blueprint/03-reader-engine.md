@@ -244,12 +244,16 @@ Their core:
 ```glsl
 float median3(vec3 v) { return max(min(v.r, v.g), min(max(v.r, v.g), v.b)); }
 
-void main() {
-  vec2 unitRange = vec2(u_pxRange) / vec2(textureSize(u_atlas, 0));
-  vec2 screenTexSize = vec2(1.0) / fwidth(v_uv);
-  float screenPxRange = max(0.5 * dot(unitRange, screenTexSize), 1.0);
+// Bilinear in the shader from SLOT-LOCAL coordinates (texelFetch, clamped to
+// the slot): every fragment of a glyph samples at bit-identical positions
+// wherever its slot is, and no slot can bleed into its neighbor.
+vec3 sampleSlot();
 
-  float sdPx = (median3(texture(u_atlas, v_uv).rgb) - 0.5) * screenPxRange;
+void main() {
+  vec2 texelsPerPx = max(fwidth(v_local), vec2(1e-6));
+  float screenPxRange = max(0.5 * u_pxRange * (1.0 / texelsPerPx.x + 1.0 / texelsPerPx.y), 1.0);
+
+  float sdPx = (median3(sampleSlot()) - 0.5) * screenPxRange;
   float enc = clamp(sdPx / u_distRangePx + 0.5, 0.0, 1.0);   // u_distRangePx = 4
   o_enc = enc * vec4(equal(uvec4(v_role), uvec4(0u, 1u, 2u, 99u)));  // MAX-blended
 }

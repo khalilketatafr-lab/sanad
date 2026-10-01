@@ -138,6 +138,53 @@ against. It is needed for **determinism**. The Ex Libris forensic decoder
 re-renders reference pages and correlates against leaks, and slot-dependent
 sampling noise would degrade that signal (blueprint 05 §4.2).
 
+### Real pages: full pipeline, real fonts (roadmap §10.3)
+
+`cargo run -p sanad-atelier --example golden_pages` takes three fixture pages
+(`fixtures/typeset`) through the whole pipeline: shape (rustybuzz, UAX #9,
+Knuth–Liang, kashida from Arabic joining) → permute → MSDF (fdsm) → shred →
+power-of-two atlas → Compositor (Knuth–Plass, kashida-first, L2). The texts
+are *Pride and Prejudice* in Literata, *Kalīla wa-Dimna* in Noto Naskh Arabic,
+and mixed bidi. `packages/lumen/test/golden.test.ts` renders the result in all
+5 themes.
+
+| | Latin | Arabic | Mixed |
+|---|---|---|---|
+| Lines / glyphs | 21 / 647 | 17 / 997 | 16 / 760 |
+| Fragments drawn | 1 907 | 2 447 | 1 998 |
+| Kashidas / hyphens | 0 / 1 | 121 / 0 | 56 / 1 |
+| Shredded vs whole glyphs, all 5 themes | **0 / 255** | **0 / 255** | **0 / 255** |
+
+Atlas: 163 glyphs in one 2048 × 1024 page; 158 shredded, 5 atomic.
+
+Three findings, all fixed:
+
+1. **Stray slivers at quad edges.** Only the median of an MSDF texel is a
+   distance. Far from the outline, individual channels hold arbitrary
+   pseudo-distances such as `(1, 0, 0)`. Hardware bilinear filtering at a quad
+   edge also reads the neighboring atlas slot, and mixing two such texels gave
+   a median above ½: faint dashes beside some glyphs, and up to 81/255
+   shredded-vs-whole difference. **Fix:** Atelier clears every texel whose
+   median is saturated outside to `(0, 0, 0)`. This changes no distance the
+   renderer uses, and slot borders become true zeros.
+2. **Placement-dependent sampling.** With (1) fixed, 11/255 differences
+   remained on ~900 edge pixels. The hardware sampler rounds *absolute*
+   texel coordinates, and a glyph's fragments live in different slots. A
+   last-bit difference in sub-texel position flips one LSB of Pass 1's 8-bit
+   distance target, which the coverage curve and sRGB encoding amplify at
+   dark ink edges. Power-of-two layout (above) is not enough at arbitrary
+   page positions. **Fix:** Pass 1 does its own bilinear reconstruction from
+   *slot-local* coordinates with `texelFetch`, clamped to the slot. Every
+   fragment of a glyph has the same quad and slot size, so it interpolates
+   bit-identical weights wherever it sits in the atlas. The union is exact by
+   construction, independent of GPU filtering precision, and slots cannot
+   bleed into each other. Result: **0 / 255 on every page in every theme.**
+3. **Atomic glyphs.** Exactness needs each cell dilated by ρ/2 + 2 texels.
+   Glyphs within that band of a single cut, such as the period, dots and
+   harakat, or the tatweel stroke, come out with one fragment equal to the
+   whole glyph. Atelier detects this and stores them as one fragment. They
+   carry no letterform; every letter is shredded.
+
 ## 7. Security properties and limits
 
 - **Generic atlas OCR fails.** A slot holds a partial shape: a bowl without a

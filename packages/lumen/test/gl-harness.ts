@@ -34,7 +34,7 @@ function instances(meta: AtlasMeta, slots: readonly number[], size: number): Arr
   slots.forEach((slot, i) => {
     const o = (i * GLYPH_INSTANCE.stride) / 4;
     f.set([16, 16, size, size], o); // a_rect (device px; camera = identity scale)
-    f.set([(slot * meta.slotSize) / meta.width, 0, ((slot + 1) * meta.slotSize) / meta.width, 1], o + 4); // a_uv
+    f.set([slot * meta.slotSize, 0, meta.slotSize, meta.slotSize], o + 4); // a_slot (texels)
     u[o + 8] = ROLE.ink;
     f[o + 9] = 0;
   });

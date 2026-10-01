@@ -2,7 +2,7 @@
 
 use proptest::prelude::*;
 use sanad_compositor::item::{GlyphRef, ItemKind, ItemParams, RunView, build_items, flags as F};
-use sanad_compositor::layout::{GlyphKind, layout_paragraph};
+use sanad_compositor::layout::{GlyphKind, Measure, layout_paragraph, layout_paragraph_with};
 use sanad_compositor::linebreak::{BreakParams, Placed, Quality, break_paragraph, justify};
 
 const SCALE: f32 = 0.02; // 1000 upem at 20 px
@@ -58,6 +58,7 @@ impl Run {
             scale: SCALE,
             gids: &self.gids,
             advances: &self.adv,
+            offsets: &[],
             flags: &self.flags,
             bidi_levels: &self.levels,
             kashida_priority: &self.kprio,
@@ -477,4 +478,82 @@ fn no_break_space_is_never_a_line_break() {
         let it = items[line.end];
         assert_eq!(it.glyph.index as usize, keep, "broke at a no-break space");
     }
+}
+
+#[test]
+fn rtl_cluster_glyphs_are_drawn_in_visual_order_with_mark_offsets() {
+    // One RTL cluster: base (advance 500) + mark (advance 0) whose GPOS offset
+    // (+120, +400) is relative to the pen in VISUAL order, i.e. *before* the
+    // base, as HarfBuzz/rustybuzz report it.
+    let gids = [10, 11];
+    let advances = [500, 0];
+    let offsets = [[0, 0], [120, 400]];
+    let flags = [F::CLUSTER_START | F::WORD_START, 0];
+    let levels = [1, 1];
+    let run = RunView {
+        scale: SCALE,
+        gids: &gids,
+        advances: &advances,
+        offsets: &offsets,
+        flags: &flags,
+        bidi_levels: &levels,
+        kashida_priority: &[],
+        kashida_max: &[],
+        hyphen: None,
+        tatweel: None,
+    };
+    let layout = layout_paragraph(
+        &[run],
+        200.0,
+        1,
+        &ItemParams::default(),
+        &BreakParams::default(),
+    );
+    let line = &layout.lines[0];
+    let at = |gid: u16| line.glyphs.iter().find(|g| g.gid == gid).expect("glyph");
+    let (base, mark) = (at(10), at(11));
+    // Right-aligned last line: the cluster occupies [190, 200).
+    assert_eq!(base.x, 190.0);
+    assert_eq!(
+        mark.x,
+        190.0 + 120.0 * SCALE,
+        "mark offset applies at the pen before the base"
+    );
+    assert_eq!(mark.y, 400.0 * SCALE);
+    assert_eq!(
+        line.glyphs[0].gid, 11,
+        "visual order: mark first, then base"
+    );
+}
+
+#[test]
+fn first_line_indent_sits_at_the_start_edge() {
+    let measure = Measure {
+        width: 300.0,
+        first_indent: 20.0,
+    };
+    let (ip, bp) = (ItemParams::default(), BreakParams::default());
+
+    let ltr = latin(&[4, 5, 3, 6, 4, 5, 3, 6, 4, 5, 3, 6, 4]);
+    let l = layout_paragraph_with(&[ltr.view()], measure, 0, &ip, &bp);
+    assert!(l.lines.len() > 1);
+    assert_eq!(
+        l.lines[0].glyphs[0].x, 20.0,
+        "LTR first line starts after the indent"
+    );
+    assert!(
+        (l.lines[0].advance - 280.0).abs() < 0.01,
+        "and is justified to width − indent"
+    );
+    assert_eq!(l.lines[1].glyphs[0].x, 0.0);
+
+    let rtl = arabic(13, &[]);
+    let r = layout_paragraph_with(&[rtl.view()], measure, 1, &ip, &bp);
+    let first = &r.lines[0];
+    let right = first.glyphs.iter().map(|g| g.x).fold(f32::MIN, f32::max);
+    assert!(
+        right < 280.0,
+        "RTL first line ends before the right-hand indent ({right})"
+    );
+    assert!((first.advance - 280.0).abs() < 0.01);
 }

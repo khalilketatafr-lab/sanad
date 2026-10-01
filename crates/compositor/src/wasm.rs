@@ -176,6 +176,7 @@ impl Compositor {
         &mut self,
         gids: &[u16],
         advances: &[i16],
+        offsets: &[i16],
         flags: &[u8],
         bidi_levels: &[u8],
         kashida_priority: &[u8],
@@ -189,13 +190,19 @@ impl Compositor {
         tatweel_advance: i16,
     ) -> Result<u32, JsError> {
         let n = gids.len();
-        if advances.len() != n || flags.len() != n || bidi_levels.len() != n {
+        if advances.len() != n
+            || flags.len() != n
+            || bidi_levels.len() != n
+            || !(offsets.is_empty() || offsets.len() == 2 * n)
+        {
             return Err(JsError::new("layout_paragraph: SoA length mismatch"));
         }
+        let offsets: Vec<[i16; 2]> = offsets.chunks_exact(2).map(|p| [p[0], p[1]]).collect();
         let run = RunView {
             scale,
             gids,
             advances,
+            offsets: &offsets,
             flags,
             bidi_levels,
             kashida_priority,
@@ -215,7 +222,8 @@ impl Compositor {
         Ok(lines)
     }
 
-    /// Positioned glyphs of a line as `[gid, x, scale_x, kind]*` (kind: 0 glyph, 1 kashida, 2 hyphen).
+    /// Positioned glyphs of a line as `[gid, x, y, scale_x, kind]*` (y: offset
+    /// from the baseline, positive up; kind: 0 glyph, 1 kashida, 2 hyphen).
     pub fn line_glyphs(&self, line: u32) -> Float32Array {
         let mut v: Vec<f32> = Vec::new();
         if let Some(l) = self
@@ -229,7 +237,7 @@ impl Compositor {
                     GlyphKind::Kashida => 1.0,
                     GlyphKind::Hyphen => 2.0,
                 };
-                v.extend_from_slice(&[f32::from(g.gid), g.x, g.scale_x, kind]);
+                v.extend_from_slice(&[f32::from(g.gid), g.x, g.y, g.scale_x, kind]);
             }
         }
         Float32Array::from(v.as_slice())

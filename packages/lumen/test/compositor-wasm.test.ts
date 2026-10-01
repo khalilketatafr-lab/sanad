@@ -40,9 +40,14 @@ function paragraph(words: readonly number[]) {
     }
   });
   const n = gids.length;
+  // A GPOS-style displacement on glyph 1 (x +100, y +200 units): moves that
+  // glyph only, never the pen.
+  const offsets = new Int16Array(2 * n);
+  offsets.set([100, 200], 2);
   return {
     gids: Uint16Array.from(gids),
     adv: Int16Array.from(adv),
+    offsets,
     flags: Uint8Array.from(flags),
     levels: new Uint8Array(n),
   };
@@ -51,7 +56,7 @@ function paragraph(words: readonly number[]) {
 function compositorWithParagraph(): Compositor {
   const p = paragraph([3, 4, 5]);
   const c = new Compositor();
-  const lines = c.layout_paragraph(p.gids, p.adv, p.flags, p.levels, new Uint8Array(), new Uint16Array(), 0.02, 500, 0, 99, 330, 0, 0);
+  const lines = c.layout_paragraph(p.gids, p.adv, p.offsets, p.flags, p.levels, new Uint8Array(), new Uint16Array(), 0.02, 500, 0, 99, 330, 0, 0);
   assert.equal(lines, 1);
   c.set_line_height(30);
   return c;
@@ -66,10 +71,12 @@ function tap(ring: PointerRingProducer, x: number, y: number, t0: number, dx = 1
 
 test("wasm layout matches the native layout contract", () => {
   const c = compositorWithParagraph();
-  const g = c.line_glyphs(0); // [gid, x, scale_x, kind]*
-  assert.equal(g.length / 4, 12, "12 glyphs, spaces carry no glyph");
+  const g = c.line_glyphs(0); // [gid, x, y, scale_x, kind]*
+  assert.equal(g.length / 5, 12, "12 glyphs, spaces carry no glyph");
   assert.equal(g[1], 0); // first glyph at x = 0
-  assert.equal(g[4 * 3 + 1], 35); // word 2 starts after 30 px of glyphs + 5 px space
+  assert.equal(g[5 * 3 + 1], 35); // word 2 starts after 30 px of glyphs + 5 px space
+  assert.deepEqual([g[5 + 1], g[5 + 2]], [12, 4], "glyph 1 drawn at pen 10 px + 2 px, 4 px above the baseline");
+  assert.equal(g[10 + 1], 20, "the offset does not move the pen");
   c.free();
 });
 

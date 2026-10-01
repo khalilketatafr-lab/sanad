@@ -12,7 +12,19 @@ workspace = true
 
 [dependencies]
 thiserror.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+sanad-compositor.workspace = true
+rustybuzz.workspace = true
+ttf-parser.workspace = true
+fdsm.workspace = true
+fdsm-ttf-parser.workspace = true
+nalgebra.workspace = true
+image.workspace = true
+unicode-bidi.workspace = true
+hyphenation.workspace = true
+rand_chacha.workspace = true
+rand_core.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

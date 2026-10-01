@@ -38,6 +38,9 @@ pub struct RunView<'a> {
     pub scale: f32,
     pub gids: &'a [u16],
     pub advances: &'a [i16],
+    /// Empty, or one `[x, y]` displacement per glyph (font units, y up): GPOS
+    /// mark attachment and cursive offsets. Never affects the pen.
+    pub offsets: &'a [[i16; 2]],
     pub flags: &'a [u8],
     pub bidi_levels: &'a [u8],
     /// Empty, or one entry per glyph (0 = none, 1 = highest … 7 = lowest).
