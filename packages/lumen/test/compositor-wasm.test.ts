@@ -4,11 +4,13 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { before, test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { Compositor, PointerRingConsumer, initSync } from "@sanad/lumen-wasm";
 import { PointerRingProducer, type PointerPhase } from "../src/input/pointer-ring.ts";
+import { digestReflow, generateReflowFixture, prepare } from "./fixtures/reflow.ts";
 
 const wasmPath = fileURLToPath(import.meta.resolve("@sanad/lumen-wasm/sanad_compositor_bg.wasm"));
 
@@ -78,6 +80,21 @@ test("wasm layout matches the native layout contract", () => {
   assert.deepEqual([g[5 + 1], g[5 + 2]], [12, 4], "glyph 1 drawn at pen 10 px + 2 px, 4 px above the baseline");
   assert.equal(g[10 + 1], 20, "the offset does not move the pen");
   c.free();
+});
+
+test("wasm lays out real Latin and Arabic paragraphs bit-identically to native", () => {
+  // Atelier shapes and permutes the §10.4 fixture and records the native
+  // Compositor's output digest at 5 measures; the wasm build must match it.
+  const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const fixture = generateReflowFixture(repo);
+  assert.equal(fixture.paragraphs.length, 20);
+  const paragraphs = fixture.paragraphs.map(prepare);
+  const c = new Compositor();
+  for (const ref of fixture.reference) {
+    const got = digestReflow(c, paragraphs, ref.width);
+    assert.equal(got.lines, ref.lines, `${ref.width}px: line count`);
+    assert.equal(got.digest, ref.digest, `${ref.width}px: glyph positions differ from native`);
+  }
 });
 
 test("taps travel main thread → SharedArrayBuffer → wasm and come back hit-tested", () => {
