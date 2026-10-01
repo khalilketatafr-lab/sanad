@@ -3,6 +3,7 @@
   "ui": "stream",
   "globalDependencies": ["tsconfig.base.json", "rust-toolchain.toml"],
   "globalEnv": ["NODE_ENV"],
+  "globalPassThroughEnv": ["CI", "PLAYWRIGHT_BROWSERS_PATH", "LUMEN_TEST_VERBOSE", "CARGO_HOME", "RUSTUP_HOME"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

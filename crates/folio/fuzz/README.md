@@ -38,4 +38,6 @@ each one into a regular unit test in `src/codec.rs` or `src/payload.rs` before
 fixing it.
 
 `fuzz/corpus` and `fuzz/artifacts` are git-ignored. CI runs both targets for
-60 seconds on every PR that touches `crates/folio` (see `.github/workflows/ci.yml`).
+60 seconds on every PR that touches `crates/folio`, with a pinned nightly and
+cargo-fuzz, and uploads any crash as an artifact
+(`.github/workflows/folio-fuzz.yml`).

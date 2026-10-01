@@ -1,0 +1,74 @@
+# Fuzz smoke test for the client-facing Folio decoders (crates/folio/fuzz).
+# Each target runs for 60 s on every change to the codec. Longer campaigns run
+# locally or on a schedule (see crates/folio/fuzz/README.md).
+name: Folio fuzz
+
+on:
+  pull_request:
+    paths:
+      - crates/folio/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/folio-fuzz.yml
+  push:
+    branches: [main]
+    paths:
+      - crates/folio/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: folio-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # cargo-fuzz needs nightly sanitizers; pinned so a nightly regression can't
+  # turn CI red on an unrelated change.
+  FUZZ_TOOLCHAIN: nightly-2026-10-01
+  CARGO_FUZZ_VERSION: 0.13.2
+
+jobs:
+  fuzz:
+    name: Folio · ${{ matrix.target }} (60 s)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: chunk_header
+            args: -max_total_time=60
+          - target: payload
+            args: -max_total_time=60 -max_len=65536 -rss_limit_mb=2048
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install nightly and cargo-fuzz
+        run: |
+          rustup toolchain install "$FUZZ_TOOLCHAIN" --profile minimal
+          cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+
+      - name: Fuzz ${{ matrix.target }}
+        working-directory: crates/folio
+        env:
+          TARGET: ${{ matrix.target }}
+          ARGS: ${{ matrix.args }}
+        run: |
+          # ARGS is a fixed matrix value; splitting it into libFuzzer flags is intended.
+          # shellcheck disable=SC2086
+          cargo "+$FUZZ_TOOLCHAIN" fuzz run "$TARGET" -- $ARGS
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: folio-fuzz-${{ matrix.target }}
+          path: crates/folio/fuzz/artifacts/
+          retention-days: 30
+          if-no-files-found: ignore
