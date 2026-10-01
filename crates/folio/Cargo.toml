@@ -30,3 +30,7 @@ zstd = { workspace = true, optional = true }
 [dev-dependencies]
 proptest.workspace = true
 hex.workspace = true
+
+[[example]]
+name = "seal_fixture"
+required-features = ["seal"]

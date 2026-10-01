@@ -6,8 +6,12 @@
 //!
 //! Tokens are domain-separated by PASETO's implicit assertion: the bytes
 //! `sanad-kernel/access/v1` are signed but never transmitted, so a v4.public
-//! token minted for another purpose by the same key (e.g. a Reading
-//! Capability Token) can never verify as an access token.
+//! token minted for another purpose by the same key can never verify as an
+//! access token, and vice versa.
+//!
+//! The same issuer mints **Reading Capability Tokens** (blueprint 01 §3.4,
+//! implicit assertion `sanad-kernel/rct/v1`). Each lease carries one, and
+//! Oracle, quotes and accessibility verify it without a database round trip.
 
 use core::time::Duration;
 
@@ -23,6 +27,7 @@ use uuid::Uuid;
 pub const ISSUER: &str = "sanad-kernel";
 pub const AUDIENCE: &str = "sanad";
 const IMPLICIT: &[u8] = b"sanad-kernel/access/v1";
+const IMPLICIT_RCT: &[u8] = b"sanad-kernel/rct/v1";
 
 #[derive(Debug, Error)]
 pub enum TokenError {
@@ -40,6 +45,20 @@ pub struct AccessClaims {
     /// cnf.jkt: the only key allowed to sign proofs for this token.
     pub jkt: String,
     pub tier: String,
+}
+
+/// What a lease grants, for services that never see the lease itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RctClaims {
+    pub device_id: Uuid,
+    /// The DPoP key every request presenting this RCT must be signed with.
+    pub jkt: String,
+    pub edition: Uuid,
+    pub lease_id: Uuid,
+    /// Chunk window `[start, end)` the lease covers.
+    pub window: [u32; 2],
+    /// Protection profile (`standard` or `vault`).
+    pub profile: String,
 }
 
 pub struct TokenIssuer {
@@ -98,6 +117,72 @@ impl TokenIssuer {
         c.add_additional("tier", claims.tier.clone())
             .map_err(|_| TokenError::Issue)?;
         public::sign(&self.secret, &c, None, Some(IMPLICIT)).map_err(|_| TokenError::Issue)
+    }
+
+    /// A Reading Capability Token, valid for the lease TTL.
+    pub fn issue_rct(
+        &self,
+        claims: &RctClaims,
+        ttl: core::time::Duration,
+    ) -> Result<String, TokenError> {
+        let mut c = Claims::new_expires_in(&ttl).map_err(|_| TokenError::Issue)?;
+        c.issuer(ISSUER).map_err(|_| TokenError::Issue)?;
+        c.audience(AUDIENCE).map_err(|_| TokenError::Issue)?;
+        c.subject(&claims.device_id.to_string())
+            .map_err(|_| TokenError::Issue)?;
+        c.token_identifier(&claims.lease_id.to_string())
+            .map_err(|_| TokenError::Issue)?;
+        c.add_additional("dev", format!("jkt:{}", claims.jkt))
+            .map_err(|_| TokenError::Issue)?;
+        c.add_additional("ed", claims.edition.to_string())
+            .map_err(|_| TokenError::Issue)?;
+        c.add_additional("win", serde_json::json!(claims.window))
+            .map_err(|_| TokenError::Issue)?;
+        c.add_additional("pro", claims.profile.clone())
+            .map_err(|_| TokenError::Issue)?;
+        public::sign(&self.secret, &c, None, Some(IMPLICIT_RCT)).map_err(|_| TokenError::Issue)
+    }
+
+    /// Verifies an RCT (signature, purpose, iss/aud, expiry) and returns its claims.
+    pub fn verify_rct(&self, token: &str) -> Result<RctClaims, TokenError> {
+        let mut rules = ClaimsValidationRules::new();
+        rules.validate_issuer_with(ISSUER);
+        rules.validate_audience_with(AUDIENCE);
+        let untrusted =
+            UntrustedToken::<Public, V4>::try_from(token).map_err(|_| TokenError::Invalid)?;
+        let trusted = public::verify(&self.public, &untrusted, &rules, None, Some(IMPLICIT_RCT))
+            .map_err(|_| TokenError::Invalid)?;
+        let c = trusted.payload_claims().ok_or(TokenError::Invalid)?;
+        let str_claim = |k: &str| {
+            c.get_claim(k)
+                .and_then(Value::as_str)
+                .ok_or(TokenError::Invalid)
+        };
+        let uuid = |k: &str| {
+            str_claim(k).and_then(|s| Uuid::parse_str(s).map_err(|_| TokenError::Invalid))
+        };
+        let window = c
+            .get_claim("win")
+            .and_then(Value::as_array)
+            .and_then(|w| match w.as_slice() {
+                [a, b] => Some([
+                    u32::try_from(a.as_u64()?).ok()?,
+                    u32::try_from(b.as_u64()?).ok()?,
+                ]),
+                _ => None,
+            })
+            .ok_or(TokenError::Invalid)?;
+        Ok(RctClaims {
+            device_id: uuid("sub")?,
+            jkt: str_claim("dev")?
+                .strip_prefix("jkt:")
+                .ok_or(TokenError::Invalid)?
+                .to_owned(),
+            edition: uuid("ed")?,
+            lease_id: uuid("jti")?,
+            window,
+            profile: str_claim("pro")?.to_owned(),
+        })
     }
 
     /// Verifies signature, implicit assertion, iss/aud and iat/nbf/exp.
@@ -169,5 +254,28 @@ mod tests {
         let other = public::sign(&a.secret, &c, None, Some(b"sanad-kernel/rct/v1"))
             .unwrap_or_else(|e| panic!("{e}"));
         assert!(a.verify(&other).is_err(), "cross-purpose token accepted");
+    }
+
+    #[test]
+    fn rct_round_trip_and_purpose_separation() {
+        let t = TokenIssuer::generate(Duration::from_mins(15)).unwrap_or_else(|e| panic!("{e}"));
+        let rct = RctClaims {
+            device_id: Uuid::now_v7(),
+            jkt: "abc".into(),
+            edition: Uuid::now_v7(),
+            lease_id: Uuid::now_v7(),
+            window: [20, 25],
+            profile: "standard".into(),
+        };
+        let token = t
+            .issue_rct(&rct, Duration::from_mins(15))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(t.verify_rct(&token).ok(), Some(rct.clone()));
+        assert!(t.verify(&token).is_err(), "an RCT is not an access token");
+        let access = t.issue(&claims()).unwrap_or_else(|e| panic!("{e}"));
+        assert!(
+            t.verify_rct(&access).is_err(),
+            "an access token is not an RCT"
+        );
     }
 }

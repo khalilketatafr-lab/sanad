@@ -2,10 +2,16 @@
  * End-to-end: the real `sanad-kernel` binary, driven by the real Vault
  * Worker code over HTTP, from Node (WebCrypto) and from Chromium on a
  * separate reader origin (CORS, IndexedDB-persisted non-extractable keys).
+ *
+ * Includes the stub lease: the Kernel wraps chunk keys to the device's ECDH
+ * key; the Vault unwraps them with WebCrypto and decrypts chunks sealed by
+ * Folio's own code (`seal_fixture`), served from the reader origin as a CDN.
  */
 import assert from "node:assert/strict";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { tmpdir } from "node:os";
 import type { AddressInfo } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
@@ -14,7 +20,12 @@ import { build } from "esbuild";
 import { chromium } from "playwright";
 import { MemoryKeyStore, loadOrCreateDeviceKeys } from "../src/vault/device-keys.ts";
 import { createDpopProof } from "../src/vault/dpop.ts";
+import { FolioError, openChunk } from "../src/vault/folio.ts";
 import { KernelClient, KernelError } from "../src/vault/kernel-client.ts";
+import { chunkKeyId, unwrapLease } from "../src/vault/lease.ts";
+
+/** The development catalog's canary edition (crates/kernel/src/catalog.rs). */
+const CANARY = "00000000-0000-7000-8000-00000000ca7a";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../../..");
@@ -22,6 +33,8 @@ let kernel: ChildProcess;
 let kernelOrigin = "";
 let reader: Server;
 let readerOrigin = "";
+let sealedDir = "";
+let manifest: { chunk: number; variant: number; file: string; sha256: string }[] = [];
 
 async function freePort(): Promise<number> {
   const s = createServer();
@@ -33,6 +46,9 @@ async function freePort(): Promise<number> {
 
 before(async () => {
   execFileSync("cargo", ["build", "-q", "-p", "sanad-kernel"], { cwd: repo, stdio: "inherit" });
+  sealedDir = mkdtempSync(join(tmpdir(), "folio-sealed-"));
+  execFileSync("cargo", ["run", "-q", "-p", "sanad-folio", "--features", "seal", "--example", "seal_fixture", "--", sealedDir], { cwd: repo, stdio: "inherit" });
+  manifest = JSON.parse(readFileSync(join(sealedDir, "manifest.json"), "utf8")) as typeof manifest;
   const readerPort = await freePort();
   readerOrigin = `http://localhost:${readerPort}`;
   const port = await freePort();
@@ -62,7 +78,9 @@ before(async () => {
   const bundle = await build({ entryPoints: [join(here, "fixtures/vault-browser.ts")], bundle: true, write: false, format: "iife", globalName: "Vault", target: "es2022" });
   const js = bundle.outputFiles[0]?.text ?? "";
   reader = createServer((req, res) => {
+    const chunk = /^\/chunks\/(chunk-\d+-v\d\.folio)$/u.exec(req.url ?? "");
     if (req.url === "/vault.js") res.writeHead(200, { "content-type": "text/javascript" }).end(js);
+    else if (chunk?.[1] !== undefined) res.writeHead(200, { "content-type": "application/octet-stream" }).end(readFileSync(join(sealedDir, chunk[1])));
     else res.writeHead(200, { "content-type": "text/html" }).end('<!doctype html><script src="/vault.js"></script>');
   });
   await new Promise<void>((r) => reader.listen(readerPort, "127.0.0.1", r));
@@ -119,6 +137,41 @@ test("client surfaces Kernel errors with RFC 9449 codes", async () => {
   await assert.rejects(client.self(), (e: unknown) => e instanceof KernelError && e.code === "not_registered");
 });
 
+const sha256hex = async (b: ArrayBuffer): Promise<string> =>
+  Buffer.from(await crypto.subtle.digest("SHA-256", b)).toString("hex");
+
+test("lease: wrapped chunk keys unwrap into decrypt-only keys that open Folio chunks", async () => {
+  const { keys } = await loadOrCreateDeviceKeys(new MemoryKeyStore());
+  const client = new KernelClient(kernelOrigin, keys);
+  await client.register();
+  const lease = await client.openEdition(CANARY);
+  assert.deepEqual(lease.window, [0, 3]);
+  assert.match(lease.rct, /^v4\.public\./u);
+  const cks = await unwrapLease(lease, keys.ecdh.privateKey);
+  assert.equal(cks.size, 3);
+  for (const entry of manifest.filter((m) => m.chunk < 3)) {
+    const key = cks.get(chunkKeyId(entry.chunk, 0));
+    assert.ok(key);
+    assert.equal(key.extractable, false);
+    assert.deepEqual([...key.usages], ["decrypt"]);
+    const sealed = new Uint8Array(readFileSync(join(sealedDir, entry.file)));
+    const plain = await openChunk(key, sealed, { kind: "flow", editionId: CANARY, chunkIndex: entry.chunk, variant: 0 });
+    assert.equal(await sha256hex(plain), entry.sha256, `chunk ${entry.chunk}`);
+
+    // A flipped ciphertext bit fails authentication; a swapped chunk fails identity.
+    const tampered = sealed.slice();
+    tampered[100] = (tampered[100] ?? 0) ^ 1;
+    await assert.rejects(openChunk(key, tampered, { kind: "flow", editionId: CANARY, chunkIndex: entry.chunk, variant: 0 }), FolioError);
+    const other = new Uint8Array(readFileSync(join(sealedDir, `chunk-${(entry.chunk + 1) % 3}-v0.folio`)));
+    await assert.rejects(openChunk(key, other, { kind: "flow", editionId: CANARY, chunkIndex: entry.chunk, variant: 0 }), /identity mismatch: chunkIndex/u);
+  }
+  assert.equal(cks.get(chunkKeyId(3, 0)), undefined, "no key outside the window");
+
+  // Another device's ECDH key cannot unwrap this lease (AES-KW integrity check).
+  const { keys: other } = await loadOrCreateDeviceKeys(new MemoryKeyStore());
+  await assert.rejects(unwrapLease(lease, other.ecdh.privateKey));
+});
+
 test("browser on the reader origin: CORS, IndexedDB-persisted non-extractable keys", async () => {
   const browser = await chromium.launch();
   try {
@@ -146,6 +199,25 @@ test("browser on the reader origin: CORS, IndexedDB-persisted non-extractable ke
     assert.deepEqual(errors.filter((e) => /CORS|Access-Control|blocked/iu.test(e)), [], "CORS errors");
     assert.equal(errors.filter((e) => e.includes("status of 400")).length, 2, errors.join("\n"));
     assert.equal(errors.length, 2, errors.join("\n"));
+  } finally {
+    await browser.close();
+  }
+});
+
+test("browser: lease unwrap and chunk decryption with WebCrypto, chunks from the reader origin", async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.goto(readerOrigin);
+    type Result = { window: [number, number]; digests: Record<string, string>; keyProps: { extractable: boolean; usages: string[] }[]; rctPrefix: string };
+    const r = (await page.evaluate(
+      ([o, e]) => (globalThis as unknown as { Vault: { lease: (o: string, e: string) => Promise<unknown> } }).Vault.lease(o, e),
+      [kernelOrigin, CANARY] as const,
+    )) as Result;
+    assert.deepEqual(r.window, [0, 3]);
+    assert.equal(r.rctPrefix, "v4.public.");
+    for (const p of r.keyProps) assert.deepEqual(p, { extractable: false, usages: ["decrypt"] });
+    for (const m of manifest.filter((x) => x.chunk < 3)) assert.equal(r.digests[String(m.chunk)], m.sha256, `chunk ${m.chunk}`);
   } finally {
     await browser.close();
   }

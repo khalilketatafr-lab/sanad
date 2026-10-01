@@ -39,6 +39,7 @@ pub enum ApiError {
     },
     BadRequest(String),
     Forbidden(&'static str),
+    NotFound(&'static str),
     Unavailable(&'static str),
     Internal,
 }
@@ -116,6 +117,7 @@ impl IntoResponse for ApiError {
             }
             Self::BadRequest(detail) => (StatusCode::BAD_REQUEST, body("invalid_request", detail)),
             Self::Forbidden(detail) => (StatusCode::FORBIDDEN, body("access_denied", detail)),
+            Self::NotFound(detail) => (StatusCode::NOT_FOUND, body("not_found", detail)),
             Self::Unavailable(detail) => {
                 headers.insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
                 (

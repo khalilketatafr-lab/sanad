@@ -9,6 +9,12 @@ export function b64url(bytes: ArrayBuffer | Uint8Array): string {
   return btoa(s).replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/u, "");
 }
 
+export function b64urlDecode(s: string): Uint8Array<ArrayBuffer> {
+  if (!/^[A-Za-z0-9_-]*$/u.test(s)) throw new Error("invalid base64url");
+  const bin = atob(s.replace(/-/gu, "+").replace(/_/gu, "/"));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
 export function b64urlJson(value: unknown): string {
   return b64url(encoder.encode(JSON.stringify(value)));
 }

@@ -10,6 +10,7 @@
 import { createDpopProof } from "./dpop.ts";
 import type { DeviceKeys } from "./device-keys.ts";
 import { publicJwk, thumbprint, type PublicP256Jwk } from "./jose.ts";
+import type { Lease } from "./lease.ts";
 
 export interface Registration {
   readonly device_id: string;
@@ -90,6 +91,12 @@ export class KernelClient {
     if (reg.dpop_jkt !== (await this.jkt())) throw new KernelError(0, "jkt_mismatch", "Kernel bound the token to another key");
     this.#token = reg.access_token;
     return reg;
+  }
+
+  /** Opens an edition: the first lease (chunk keys wrapped to this device) and its RCT. */
+  async openEdition(editionId: string, start = 0): Promise<Lease> {
+    const res = await this.#send("POST", `/kernel/v1/editions/${encodeURIComponent(editionId)}:open`, { start }, true);
+    return (await res.json()) as Lease;
   }
 
   async self(): Promise<{ id: string; dpop_jkt: string }> {

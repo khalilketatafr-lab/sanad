@@ -80,6 +80,7 @@ pub fn point_jwk(uncompressed: &[u8]) -> Value {
 pub struct TestDevice {
     pub sign: EcdsaKeyPair,
     pub jwk: Value,
+    pub ecdh: PrivateKey,
     pub ecdh_jwk: Value,
 }
 
@@ -98,6 +99,7 @@ impl TestDevice {
         Self {
             sign,
             jwk,
+            ecdh,
             ecdh_jwk,
         }
     }

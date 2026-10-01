@@ -71,3 +71,41 @@ and resource-server roles.
 
 The Chromium test caught a browser-only bug that Node hid: calling a stored
 `fetch` with the client as `this` throws "Illegal invocation" in browsers.
+
+## Stub lease (roadmap §10.5)
+
+`POST /kernel/v1/editions/{id}:open` (DPoP-protected) returns the first lease
+of a reading session, following blueprint 01 §3.3 exactly:
+
+```text
+CK[i]      = HKDF(TMK, salt = edition_id ‖ variant, info = "folio/chunk/v1" ‖ i)   Folio's schedule
+EK         = fresh ECDH P-256 key pair per lease
+KEK        = HKDF-SHA256(ECDH(EK, DeviceKey-ECDH), salt = lease_id, info = "sanad/lease/v1")
+wrapped[i] = AES-KW(KEK, CK[i])                                                  RFC 3394, 40 bytes
+```
+
+The response carries the window `[start, end)`, the ephemeral public JWK, the
+wrapped keys and a **Reading Capability Token**. The RCT is PASETO v4.public
+with implicit assertion `sanad-kernel/rct/v1`, bound to the device's DPoP
+thumbprint, so it can never act as an access token and vice versa.
+
+These parts are still stubs:
+- the catalog: the canary edition under a published test key, development
+  only;
+- the entitlement: free editions, any registered device;
+- the variant vector (all A) and the fixed 3-chunk window.
+
+The cryptography is not a stub. Only `aws-lc-rs` is used, and the KEK is
+zeroized on drop.
+
+The Vault Worker (`packages/lumen/src/vault/lease.ts`, `folio.ts`) unwraps the
+keys with WebCrypto into **non-extractable, decrypt-only** AES-GCM keys. It
+then validates each chunk header rule for rule against the Rust codec, checks
+its identity against the lease, and decrypts.
+
+| Test | Proves |
+|---|---|
+| Rust unit (4) | Device recovers exactly Folio's chunk keys; another device or lease id fails AES-KW's integrity check; fresh ephemeral key per lease; invalid device point refused |
+| Rust integration (4) | Full router flow; RCT verifies and is bound to the DPoP key; window clipping; 404 for unknown editions and operations; 401 without a DPoP-bound token |
+| TS e2e, Node | Unwrap against the real binary, decrypt chunks sealed by `seal_fixture`, reject tampered and swapped chunks, no key outside the window, another device cannot unwrap |
+| TS e2e, Chromium | The same on the reader origin with IndexedDB keys, chunks fetched over HTTP like a CDN; keys report `extractable: false`, usages `["decrypt"]` |

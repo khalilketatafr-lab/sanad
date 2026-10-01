@@ -2,17 +2,20 @@
 //!
 //! Phase 0 skeleton (spike S4): device registration with DPoP proof of
 //! possession (RFC 9449), DPoP-bound PASETO access tokens, stateless nonces,
-//! `jti` replay protection, and the auth extractor every later route
-//! (leases, search, quotes) builds on.
+//! `jti` replay protection, the auth extractor every later route builds on,
+//! and stub leases: chunk keys ECDH-wrapped to the device, with a Reading
+//! Capability Token.
 //!
 //! Spec: `docs/blueprint/01-architecture.md` §3.
 
 pub mod auth;
+pub mod catalog;
 pub mod config;
 pub mod devices;
 pub mod dpop;
 pub mod error;
 pub mod jose;
+pub mod lease;
 pub mod nonce;
 pub mod replay;
 pub mod routes;
@@ -32,6 +35,7 @@ use tower_http::trace::TraceLayer;
 use url::Url;
 use zeroize::Zeroizing;
 
+use crate::catalog::Catalog;
 use crate::config::KernelConfig;
 use crate::devices::DeviceStore;
 use crate::dpop::DpopVerifier;
@@ -48,6 +52,7 @@ pub struct Kernel {
     pub replay: ReplayCache,
     pub tokens: TokenIssuer,
     pub devices: DeviceStore,
+    pub catalog: Catalog,
 }
 
 pub type AppState = Arc<Kernel>;
@@ -83,6 +88,13 @@ impl Kernel {
             replay: ReplayCache::new(2 * config.proof_skew_secs + 1, 1_000_000),
             tokens,
             devices,
+            // Production editions come from Postgres (KMS-wrapped TMKs); the
+            // development catalog holds only the canary book under a test key.
+            catalog: if config.production {
+                Catalog::default()
+            } else {
+                Catalog::development()
+            },
             config,
         })
     }
@@ -114,6 +126,7 @@ pub fn router(state: AppState) -> Router {
         .route("/healthz", get(|| async { "ok" }))
         .route(routes::devices::PATH, post(routes::devices::register))
         .route(routes::devices::SELF_PATH, get(routes::devices::get_self))
+        .route(routes::editions::PATH, post(routes::editions::open))
         .layer(RequestBodyLimitLayer::new(16 * 1024))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
