@@ -13,7 +13,7 @@
 
 use hyphenation::{Hyphenator, Language as HyphenLanguage, Load, Standard};
 use rustybuzz::{Direction, Face, Language, Script, UnicodeBuffer};
-use sanad_compositor::item::flags;
+use sanad_compositor::item::{RunView, flags};
 use thiserror::Error;
 use unicode_bidi::BidiInfo;
 
@@ -81,6 +81,27 @@ pub struct ShapedRun {
     pub kashida_max: Vec<u16>,
 }
 
+impl ShapedRun {
+    /// The Compositor's view of this run with FONT glyph ids: what Atelier's
+    /// own analysis (QA, benchmarks) lays out. Pages for the client use
+    /// permuted ids instead (see [`crate::page`]).
+    #[must_use]
+    pub fn view(&self, specials: Specials) -> RunView<'_> {
+        RunView {
+            scale: self.scale,
+            gids: &self.gids,
+            advances: &self.advances,
+            offsets: &self.offsets,
+            flags: &self.flags,
+            bidi_levels: &self.levels,
+            kashida_priority: &self.kashida_priority,
+            kashida_max: &self.kashida_max,
+            hyphen: specials.hyphen,
+            tatweel: specials.tatweel,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShapedParagraph {
     /// Paragraph embedding level (0 LTR, 1 RTL).
@@ -106,7 +127,9 @@ pub struct Typesetter<'a> {
     fonts: Vec<FontFace<'a>>,
     latin: FontId,
     arabic: FontId,
-    hyphenator: Standard,
+    /// Knuth–Liang patterns for the Latin face's language; `None` sets
+    /// Latin text unhyphenated (never with another language's patterns).
+    hyphenator: Option<Standard>,
     /// Maximum kashida elongation per opportunity, in ems.
     pub kashida_max_em: f32,
 }
@@ -133,9 +156,11 @@ struct ClusterSpan {
 impl<'a> Typesetter<'a> {
     /// `latin` sets Latin and neutral text in LTR context; `arabic` sets
     /// Arabic and neutrals in RTL context.
+    ///
+    /// Hyphenation follows `latin.language` ([`patterns_for`]); a language
+    /// without patterns is set unhyphenated, never with another language's.
     pub fn new(latin: FontFace<'a>, arabic: FontFace<'a>) -> Result<Self, ShapeError> {
-        let hyphenator = Standard::from_embedded(HyphenLanguage::EnglishUS)
-            .map_err(|e| ShapeError::Hyphenation(e.to_string()))?;
+        let hyphenator = patterns_for(latin.language.as_str())?;
         Ok(Self {
             fonts: vec![latin, arabic],
             latin: FontId(0),
@@ -143,6 +168,20 @@ impl<'a> Typesetter<'a> {
             hyphenator,
             kashida_max_em: 0.5,
         })
+    }
+
+    /// Replaces the Latin hyphenation patterns (e.g. French, loaded with
+    /// `hyphenation::Load::from_path`), or disables hyphenation with `None`.
+    #[must_use]
+    pub fn with_hyphenator(mut self, hyphenator: Option<Standard>) -> Self {
+        self.hyphenator = hyphenator;
+        self
+    }
+
+    /// The language of the active hyphenation patterns, if any.
+    #[must_use]
+    pub fn hyphenation_language(&self) -> Option<HyphenLanguage> {
+        self.hyphenator.as_ref().map(Standard::language)
     }
 
     #[must_use]
@@ -246,20 +285,32 @@ impl<'a> Typesetter<'a> {
         out
     }
 
+    /// Characters that would draw `.notdef`: those whose face, picked
+    /// exactly as [`Typesetter::shape_paragraph`] picks it (fallback
+    /// included), has no glyph. Default-ignorable characters (joiners,
+    /// variation selectors, bidi controls) need none and are skipped.
+    #[must_use]
+    pub fn uncovered(&self, text: &str) -> Vec<(usize, char)> {
+        let (_, chars, levels) = resolve_levels(text);
+        let fonts = self.assign_fonts(&chars, &levels);
+        chars
+            .iter()
+            .zip(fonts)
+            .filter(|&(&(_, c), f)| {
+                !c.is_whitespace()
+                    && !is_default_ignorable(c)
+                    && self.font(f).face.glyph_index(c).is_none()
+            })
+            .map(|(&bc, _)| bc)
+            .collect()
+    }
+
     /// Shapes one paragraph.
     pub fn shape_paragraph(&self, text: &str) -> Result<ShapedParagraph, ShapeError> {
         if text.trim().is_empty() {
             return Err(ShapeError::Empty);
         }
-        let bidi = BidiInfo::new(text, None);
-        let base_level = bidi.paragraphs.first().map_or(0, |p| p.level.number());
-        let level_at = |byte: usize| {
-            bidi.levels
-                .get(byte)
-                .map_or(base_level, unicode_bidi::Level::number)
-        };
-        let chars: Vec<(usize, char)> = text.char_indices().collect();
-        let levels: Vec<u8> = chars.iter().map(|&(b, _)| level_at(b)).collect();
+        let (base_level, chars, levels) = resolve_levels(text);
         let fonts = self.assign_fonts(&chars, &levels);
 
         // Runs: maximal spans of equal (font, level).
@@ -382,7 +433,10 @@ impl<'a> Typesetter<'a> {
         if word.chars().count() < 5 || word.chars().all(char::is_uppercase) {
             return;
         }
-        for b in self.hyphenator.hyphenate(word).breaks {
+        let Some(hyphenator) = &self.hyphenator else {
+            return;
+        };
+        for b in hyphenator.hyphenate(word).breaks {
             let at = offset + b;
             let (Some(before), Some(after)) =
                 (containing(clusters, at - 1), containing(clusters, at))
@@ -461,6 +515,57 @@ fn containing(clusters: &[ClusterSpan], byte: usize) -> Option<&ClusterSpan> {
 }
 
 /// Word and sentence starts, glue (spaces) and break opportunities.
+/// French patterns: hyph-utf8 `hyph-fr` (MIT), prebuilt by `hyphenation`,
+/// which embeds only en-US (see `dictionaries/README.md`).
+const FRENCH_PATTERNS: &[u8] = include_bytes!("../dictionaries/fr.standard.bincode");
+
+/// Knuth–Liang patterns for a BCP 47 tag's primary language, if Atelier
+/// has them.
+pub fn patterns_for(tag: &str) -> Result<Option<Standard>, ShapeError> {
+    let primary = tag.split(['-', '_']).next().unwrap_or(tag);
+    let loaded = match primary.to_ascii_lowercase().as_str() {
+        "en" => Standard::from_embedded(HyphenLanguage::EnglishUS),
+        "fr" => Standard::from_reader(HyphenLanguage::French, &mut &FRENCH_PATTERNS[..]),
+        _ => return Ok(None),
+    };
+    loaded
+        .map(Some)
+        .map_err(|e| ShapeError::Hyphenation(e.to_string()))
+}
+
+/// UAX #9 levels per character, and the paragraph level.
+fn resolve_levels(text: &str) -> (u8, Vec<(usize, char)>, Vec<u8>) {
+    let bidi = BidiInfo::new(text, None);
+    let base_level = bidi.paragraphs.first().map_or(0, |p| p.level.number());
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    let levels = chars
+        .iter()
+        .map(|&(b, _)| {
+            bidi.levels
+                .get(b)
+                .map_or(base_level, unicode_bidi::Level::number)
+        })
+        .collect();
+    (base_level, chars, levels)
+}
+
+/// Characters a shaper consumes without drawing (subset of Unicode's
+/// `Default_Ignorable_Code_Point` that occurs in book text).
+const fn is_default_ignorable(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{034F}'
+            | '\u{061C}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+    )
+}
+
 fn mark_words(text: &str, runs: &mut [ShapedRun], clusters: &[ClusterSpan]) {
     let mut prev_char: Option<char> = None;
     let mut sentence_open = true;
@@ -520,6 +625,45 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    #[test]
+    fn french_hyphenation_loads() {
+        let fr = patterns_for("fr-FR").unwrap().unwrap();
+        assert_eq!(fr.language(), HyphenLanguage::French);
+        // hyph-fr: "anti-con-sti-tu-tion-nel-le-ment".
+        assert!(fr.hyphenate("anticonstitutionnellement").breaks.len() >= 6);
+        assert_eq!(
+            patterns_for("en").unwrap().unwrap().language(),
+            HyphenLanguage::EnglishUS
+        );
+        assert!(
+            patterns_for("de").unwrap().is_none(),
+            "no German patterns: unhyphenated"
+        );
+    }
+
+    #[test]
+    fn hyphenation_follows_the_latin_language() {
+        let fr = typesetter().with_hyphenator(patterns_for("fr").unwrap());
+        let en = typesetter();
+        let word = "extraordinairement";
+        let points =
+            |t: &Typesetter<'_>| flagged(&t.shape_paragraph(word).unwrap(), flags::HYPHEN_POINT);
+        assert!(points(&fr) > 0);
+        assert_eq!(points(&typesetter().with_hyphenator(None)), 0);
+        assert_eq!(en.hyphenation_language(), Some(HyphenLanguage::EnglishUS));
+    }
+
+    #[test]
+    fn uncovered_reports_what_neither_face_draws() {
+        let t = typesetter();
+        assert!(
+            t.uncovered("Pride — كليلة ودمنة «١٨١٣» 1813, \u{200C}\u{200F}")
+                .is_empty()
+        );
+        // Ethiopic and an emoji: in neither face.
+        assert_eq!(t.uncovered("a ሀ 😀"), vec![(2, 'ሀ'), (6, '😀')]);
     }
 
     fn flagged(p: &ShapedParagraph, bit: u8) -> usize {
