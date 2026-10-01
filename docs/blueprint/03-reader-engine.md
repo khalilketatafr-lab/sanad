@@ -217,81 +217,67 @@ rendering gives up at 14–16 px.
  └────────────────────────┘
 ```
 
-- **`MAX` blending in pass 1** makes overlapping fragments union cleanly, with
-  no double-darkened seams. That is what makes shredding invisible.
-- Ink **roles**, not colors, are rendered. The theme is applied once, in
-  pass 3. Switching themes is a uniform change: no re-layout, no re-fetch, and
-  a crossfade is free.
+- **Pass 1 stores signed distance, not coverage.** Each role channel holds the
+  screen-space signed distance to the glyph edge over ±2 px
+  (`enc = clamp(sd_px/4 + ½)`), at 1/64 px resolution in RGBA8.
+- **`MAX` blending in pass 1** unions overlapping fragments exactly. Coverage
+  is monotone in distance, so MAX over distances is the union, with no
+  double-darkened seams. That is what makes shredding invisible. The proof
+  and GPU measurements are in
+  [`docs/spikes/s1-glyph-shredding.md`](../spikes/s1-glyph-shredding.md).
+- Ink **roles**, not colors, are rendered. Pass 3 decodes the distances and
+  applies everything theme-specific: stroke-weight compensation, coverage
+  curve, colors, warmth, glare ceiling and dimming. Switching themes is a
+  uniform change: no re-layout, no re-fetch, no Pass 1 re-render, and a
+  crossfade is free.
 - **Render on demand.** When nothing moves, no frames are drawn and battery
   use is zero. Animation frames run only during gestures and transitions.
 
 ### 4.5 Shaders
 
-**Pass 1 — coverage (MSDF fragment):**
+The production shaders are in
+[`packages/lumen/src/gl/shaders.ts`](../../packages/lumen/src/gl/shaders.ts).
+Their core:
+
+**Pass 1 — coverage (MSDF fragment → encoded distance):**
 
 ```glsl
-#version 300 es
-precision highp float;
-
-in vec2  v_uv;
-flat in int v_role;            // 0 = ink, 1 = ink2, 2 = accent
-uniform sampler2D u_atlas;
-uniform float u_pxRange;       // distance range used when generating the atlas
-uniform float u_weight;        // stroke-weight offset: theme compensation (§7.4)
-out vec4 o_cov;
-
-float median(vec3 v) { return max(min(v.r, v.g), min(max(v.r, v.g), v.b)); }
+float median3(vec3 v) { return max(min(v.r, v.g), min(max(v.r, v.g), v.b)); }
 
 void main() {
-  vec2 unitRange     = vec2(u_pxRange) / vec2(textureSize(u_atlas, 0));
+  vec2 unitRange = vec2(u_pxRange) / vec2(textureSize(u_atlas, 0));
   vec2 screenTexSize = vec2(1.0) / fwidth(v_uv);
   float screenPxRange = max(0.5 * dot(unitRange, screenTexSize), 1.0);
 
-  float sd  = median(texture(u_atlas, v_uv).rgb) - 0.5 + u_weight;
-  float cov = clamp(sd * screenPxRange + 0.5, 0.0, 1.0);
-
-  o_cov = vec4(0.0);
-  o_cov[v_role] = cov;         // MAX-blended into the role channel
+  float sdPx = (median3(texture(u_atlas, v_uv).rgb) - 0.5) * screenPxRange;
+  float enc = clamp(sdPx / u_distRangePx + 0.5, 0.0, 1.0);   // u_distRangePx = 4
+  o_enc = enc * vec4(equal(uvec4(v_role), uvec4(0u, 1u, 2u, 99u)));  // MAX-blended
 }
 ```
 
-**Pass 3 — composite (abridged):**
+**Pass 3 — composite (decode, weight, theme):**
 
 ```glsl
-#version 300 es
-precision highp float;
-
-in vec2 v_uv;
-uniform sampler2D u_cov;       // pass 1
-uniform sampler2D u_img;       // pass 2, premultiplied, linear
-uniform vec3  u_paper, u_ink, u_ink2, u_accent;   // linear RGB from theme tokens
-uniform vec3  u_hl[4];                            // highlight underlays
-uniform float u_covGamma;      // per-theme coverage curve (dark-on-light < 1 < light-on-dark)
-uniform vec3  u_warmGain;      // white-balance gains for the warmth setting
-uniform float u_lumaCeil;      // anti-glare luminance ceiling (linear Y)
-uniform float u_dim;           // in-app dimming below the OS brightness floor
-out vec4 o;
-
-vec3 toSrgb(vec3 c) {
-  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+float coverage(float enc) {
+  float d = (enc - 0.5) * u_distRangePx;                  // signed distance, screen px
+  float c = clamp(d + u_weightPx + 0.5, 0.0, 1.0);        // weight moves the edge (§7.4)
+  return pow(c, u_covGamma);
 }
 
 void main() {
-  vec4 cov = pow(texture(u_cov, v_uv), vec4(vec3(u_covGamma), 1.0));
+  vec4 e = texture(u_cov, v_uv);
   vec4 img = texture(u_img, v_uv);
-
-  vec3 c = u_paper * (1.0 - img.a) + img.rgb;                 // paper + images
-  int h = int(cov.a * 4.0 + 0.5);                              // highlight index 0..4
-  if (h > 0) c = u_hl[h - 1];                                  // underlay beneath ink
-  c = mix(c, u_ink,    cov.r);
-  c = mix(c, u_ink2,   cov.g);
-  c = mix(c, u_accent, cov.b);
-
-  c *= u_warmGain;                                             // warmth
-  float Y = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  c *= min(1.0, u_lumaCeil / max(Y, 1e-4));                    // glare ceiling
-  c *= 1.0 - u_dim;                                            // extra-dim
-  o = vec4(toSrgb(c), 1.0);
+  vec3 c = u_paper * (1.0 - img.a) + img.rgb;             // paper + images
+  int h = int(e.a * 4.0 + 0.5);
+  if (h > 0) c = u_highlight[clamp(h - 1, 0, 3)];          // underlay beneath ink
+  c = mix(c, u_ink, coverage(e.r));
+  c = mix(c, u_ink2, coverage(e.g));
+  c = mix(c, u_accent, coverage(e.b));
+  c *= u_warmGain;                                         // warmth
+  float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c *= min(1.0, u_lumaCeil / max(y, 1e-5));                // anti-glare ceiling
+  c *= 1.0 - u_dim;                                        // extra-dim
+  o_color = vec4(linearToSrgb(c), 1.0);
 }
 ```
 
@@ -483,7 +469,7 @@ page therefore always match.
 interface ThemeUniforms {
   paper: Rgb; ink: Rgb; ink2: Rgb; accent: Rgb; highlights: [Rgb, Rgb, Rgb, Rgb];
   covGamma: number;      // coverage curve
-  weight: number;        // MSDF threshold offset (stroke weight)
+  weightPx: number;      // stroke-weight compensation: edge offset in screen px (§7.4)
   lumaCeil: number;      // anti-glare ceiling, linear Y
   warmth: number;        // 0 … 1 → white-balance gains (≈ 6500 K → 3400 K)
   dim: number;           // 0 … 0.6, extra-dim below the OS minimum brightness
@@ -513,10 +499,14 @@ interface ThemeUniforms {
 ### 7.4 Optical weight compensation
 
 Light text on a dark background *looks* bolder (irradiation), so the same font
-seems heavier at night. Lumen compensates continuously through the MSDF
-threshold: `u_weight` is about −0.03 in dark themes and +0.01 in light themes,
-tuned per font. CSS can't do this, because it only has discrete weights or
-variable-font axes. Night text looks like the same typeface, not its bold cousin.
+seems heavier at night. Lumen compensates continuously in the composite pass.
+`u_weightPx` shifts the decoded glyph edge by a fraction of a screen pixel:
+about −0.20 px in dark themes and +0.05 px in light themes, tuned per font.
+Measured on the GPU test, ±0.4 px changes ink mass by about ±4%,
+monotonically. Because the offset is in screen pixels, it fades at large
+zoom, where irradiation stops mattering. CSS can't do this, because it only
+has discrete weights or variable-font axes. Night text looks like the same
+typeface, not its bold cousin.
 
 ### 7.5 Images in dark mode
 

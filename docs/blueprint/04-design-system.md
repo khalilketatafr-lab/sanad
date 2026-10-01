@@ -149,13 +149,13 @@ Contrast ratios are computed with the WCAG 2.x relative-luminance formula.
 
 Per-theme shader parameters:
 
-| Theme | `weight` (MSDF offset) | `covGamma` | `lumaCeil` | Image policy |
+| Theme | `weightPx` (edge offset, screen px) | `covGamma` | `lumaCeil` | Image policy |
 |---|---|---|---|---|
-| Paper | +0.010 | 0.90 | 1.00 | natural |
-| Linen | +0.010 | 0.90 | 0.92 | natural |
-| Dusk | −0.020 | 1.10 | 0.55 | dimmed / smart-invert |
-| Night | −0.030 | 1.15 | 0.45 | dimmed / smart-invert |
-| OLED | −0.035 | 1.20 | 0.38 | dimmed / smart-invert |
+| Paper | +0.05 | 0.90 | 1.00 | natural |
+| Linen | +0.05 | 0.90 | 0.92 | natural |
+| Dusk | −0.12 | 1.10 | 0.55 | dimmed / smart-invert |
+| Night | −0.18 | 1.15 | 0.45 | dimmed / smart-invert |
+| OLED | −0.22 | 1.20 | 0.38 | dimmed / smart-invert |
 
 These are starting values. Final tuning happens per font with golden-page
 reviews on real devices.
