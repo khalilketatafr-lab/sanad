@@ -13,6 +13,7 @@
 pub mod atlas;
 pub mod catalog;
 pub mod epub;
+pub mod ingest;
 pub mod msdf;
 pub mod page;
 pub mod permute;
