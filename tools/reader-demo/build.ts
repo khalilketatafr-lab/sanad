@@ -91,6 +91,12 @@ body { background: var(--paper); color: var(--ink); font: 400 15px/1.5 var(--fon
 .theme { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 12px 4px 4px; border: 1px solid var(--hairline); border-radius: 22px; background: var(--surface-1); color: var(--ink); font: 500 0.85rem var(--font-ui); cursor: pointer; }
 .theme[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .theme-swatch { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 1px solid; font: 600 0.8rem var(--font-display); }
+.seg-row { display: grid; grid-template-columns: 5rem 1fr; gap: 10px; align-items: center; min-height: 40px; }
+.seg-row > span { color: var(--ink); font: 400 0.85rem var(--font-ui); }
+.seg { display: inline-flex; border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; }
+.seg button { flex: 1; min-height: 36px; padding: 4px 8px; border: 0; border-inline-start: 1px solid var(--hairline); background: var(--surface-1); color: var(--ink); font: 500 0.8rem var(--font-ui); cursor: pointer; }
+.seg button:first-child { border-inline-start: 0; }
+.seg button[aria-checked="true"] { background: var(--accent); color: var(--paper); }
 .layout { display: grid; gap: 20px; margin-top: 16px; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); align-items: start; }
 @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
 .stage { min-width: 0; }
@@ -117,7 +123,17 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   <aside class="panel">
     <section>
       <h2>Reading</h2>
-      <div class="control"><label for="size">Text size</label><input id="size" type="range" min="70" max="200" value="100"><output id="size-value">20px</output></div>
+      <div class="control"><label for="size">Text size</label><input id="size" type="range" min="0" max="11" step="1" value="5"><output id="size-value">20px</output></div>
+      <div class="seg-row"><span>Spacing</span><div class="seg" role="radiogroup" aria-label="Spacing">
+        <button type="button" role="radio" data-spacing="compact" aria-checked="false">Compact</button>
+        <button type="button" role="radio" data-spacing="comfort" aria-checked="true">Comfort</button>
+        <button type="button" role="radio" data-spacing="airy" aria-checked="false">Airy</button>
+      </div></div>
+      <div class="seg-row"><span>Margins</span><div class="seg" role="radiogroup" aria-label="Margins">
+        <button type="button" role="radio" data-margins="narrow" aria-checked="false">Narrow</button>
+        <button type="button" role="radio" data-margins="normal" aria-checked="true">Normal</button>
+        <button type="button" role="radio" data-margins="wide" aria-checked="false">Wide</button>
+      </div></div>
       <div class="control"><label for="warmth">Warmth</label><input id="warmth" type="range" min="0" max="100" value="0"><output id="warmth-value">0</output></div>
       <div class="control"><label for="dim">Extra dim</label><input id="dim" type="range" min="0" max="60" value="0"><output id="dim-value">0%</output></div>
     </section>

@@ -230,7 +230,13 @@ export class SettingsStore {
   readonly #storage: SettingsStorage | undefined;
   readonly #listeners = new Set<(s: ReaderSettings) => void>();
 
-  constructor(opts: { storage?: SettingsStorage; initial?: Partial<ReaderSettings>; base?: ReaderSettings } = {}) {
+  constructor(
+    opts: {
+      storage?: SettingsStorage | undefined;
+      initial?: Partial<ReaderSettings> | undefined;
+      base?: ReaderSettings | undefined;
+    } = {},
+  ) {
     const base = opts.base ?? DEFAULT_SETTINGS;
     const persisted = opts.storage !== undefined ? loadSettings(opts.storage, base) : base;
     this.#value = opts.initial !== undefined ? normalize(opts.initial, persisted) : persisted;

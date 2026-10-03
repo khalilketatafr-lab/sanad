@@ -5,14 +5,28 @@
  * holds only a sealed chunk, an atlas and the lease's chunk key — never text
  * (P1). The chunk key here is the canary edition's published dev key; a real
  * session gets a per-lease, non-extractable key.
+ *
+ * The reading controls are driven by the production settings model
+ * (@sanad/lumen/reader/settings): a SettingsStore persisted to localStorage,
+ * whose toReaderStyle()/readerLight() feed the very same layout and theme code
+ * the reader uses. Reload the page and your size, theme, spacing and margins
+ * come back.
  */
 import { createLumenContext, type LumenContext } from "@sanad/lumen/gl/context";
 import { LumenRenderer, orthoCamera } from "@sanad/lumen/gl/renderer";
 import { MAX_DIM, themeUniforms } from "@sanad/lumen/gl/themes";
-import { DEFAULT_STYLE, glyphTableFromJson, layoutChunk } from "@sanad/lumen/reader/layout";
+import { glyphTableFromJson, layoutChunk } from "@sanad/lumen/reader/layout";
+import {
+  SIZE_STEPS,
+  SettingsStore,
+  browserStorage,
+  defaultsFor,
+  type Margins,
+  type Spacing,
+} from "@sanad/lumen/reader/settings";
 import { openFlowChunk } from "@sanad/lumen/vault/flow";
 import { parseChunk } from "@sanad/lumen/vault/folio";
-import { THEME_IDS, THEMES, type ThemeId } from "@sanad/tokens/ts";
+import { THEMES, type ThemeId } from "@sanad/tokens/ts";
 import { Compositor, initSync } from "@sanad/lumen-wasm";
 
 interface ReaderData {
@@ -79,6 +93,16 @@ async function main(): Promise<void> {
 
   const atlasPixels = await decodeAtlas(data.atlas.png, data.atlas.width, data.atlas.height);
 
+  // The production settings model, persisted to localStorage, with form-factor
+  // and time-of-day defaults.
+  const store = new SettingsStore({
+    storage: browserStorage(),
+    base: defaultsFor({
+      phone: matchMedia("(max-width: 760px)").matches,
+      night: matchMedia("(prefers-color-scheme: dark)").matches,
+    }),
+  });
+
   let ctx: LumenContext;
   try {
     ctx = createLumenContext(canvas, { onRestored: () => draw() });
@@ -90,61 +114,70 @@ async function main(): Promise<void> {
   const renderer = new LumenRenderer(ctx);
   renderer.setAtlas({ width: data.atlas.width, height: data.atlas.height, data: atlasPixels, pxRange: data.atlas.pxRange });
 
-  let theme: ThemeId = matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "paper";
-  let sizeScale = 1;
-  let warmth = 0;
-  let dim = 0;
-
   function draw(): void {
     if (ctx.state !== "live") return;
+    const s = store.value;
     const dpr = window.devicePixelRatio || 1;
-    const style = { ...DEFAULT_STYLE, sizePx: [20 * sizeScale, 24 * sizeScale] as [number, number] };
-    const page = layoutChunk(new Compositor(), chunk, atlasTable, style, dpr);
+    const page = layoutChunk(new Compositor(), chunk, atlasTable, store.style, dpr);
     canvas.width = page.width;
     canvas.height = page.height;
     canvas.style.aspectRatio = `${page.width} / ${page.height}`;
     renderer.resize(page.width, page.height);
     renderer.setCamera(orthoCamera(page.width, page.height, 1, 0, 0));
-    renderer.setTheme(themeUniforms(theme, { warmth, dim }));
+    applyChrome(s.theme);
+    renderer.setTheme(themeUniforms(s.theme, store.light));
     renderer.setInstances(page.instances, page.count);
     renderer.render();
     $("device").textContent = `${dpr}× · ${page.width} × ${page.height} px · ${page.count} fragments · ${ctx.caps.renderer}`;
   }
 
-  function selectTheme(id: ThemeId): void {
-    theme = id;
-    applyChrome(id);
+  function reflect(): void {
+    const s = store.value;
     for (const b of document.querySelectorAll<HTMLButtonElement>("[data-theme-id]")) {
-      b.setAttribute("aria-checked", String(b.dataset["themeId"] === id));
+      b.setAttribute("aria-checked", String(b.dataset["themeId"] === s.theme));
     }
-    draw();
+    for (const b of document.querySelectorAll<HTMLButtonElement>("[data-spacing]")) {
+      b.setAttribute("aria-checked", String(b.dataset["spacing"] === s.spacing));
+    }
+    for (const b of document.querySelectorAll<HTMLButtonElement>("[data-margins]")) {
+      b.setAttribute("aria-checked", String(b.dataset["margins"] === s.margins));
+    }
+    $("size-value").textContent = `${s.size}px`;
+    $("warmth-value").textContent = String(s.warmth);
+    $("dim-value").textContent = `${Math.round(s.dim * 100)}%`;
   }
 
+  // Controls → store. Every change is normalized, persisted and pushed back.
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-theme-id]")) {
-    b.addEventListener("click", () => selectTheme(b.dataset["themeId"] as ThemeId));
+    b.addEventListener("click", () => store.set({ theme: b.dataset["themeId"] as ThemeId }));
   }
-  const size = $<HTMLInputElement>("size");
-  size.addEventListener("input", () => {
-    sizeScale = Number(size.value) / 100;
-    $("size-value").textContent = `${Math.round(20 * sizeScale)}px`;
-    draw();
-  });
-  const dimInput = $<HTMLInputElement>("dim");
-  dimInput.max = String(Math.round(MAX_DIM * 100));
-  dimInput.addEventListener("input", () => {
-    dim = Number(dimInput.value) / 100;
-    $("dim-value").textContent = `${dimInput.value}%`;
-    draw();
-  });
-  const warmthInput = $<HTMLInputElement>("warmth");
-  warmthInput.addEventListener("input", () => {
-    warmth = Number(warmthInput.value) / 100;
-    $("warmth-value").textContent = warmthInput.value;
-    draw();
-  });
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-spacing]")) {
+    b.addEventListener("click", () => store.set({ spacing: b.dataset["spacing"] as Spacing }));
+  }
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-margins]")) {
+    b.addEventListener("click", () => store.set({ margins: b.dataset["margins"] as Margins }));
+  }
 
+  const size = $<HTMLInputElement>("size");
+  size.max = String(SIZE_STEPS.length - 1);
+  size.value = String(Math.max(0, SIZE_STEPS.indexOf(store.value.size)));
+  size.addEventListener("input", () => store.set({ size: SIZE_STEPS[Number(size.value)] ?? store.value.size }));
+
+  const warmth = $<HTMLInputElement>("warmth");
+  warmth.value = String(store.value.warmth);
+  warmth.addEventListener("input", () => store.set({ warmth: Number(warmth.value) }));
+
+  const dim = $<HTMLInputElement>("dim");
+  dim.max = String(Math.round(MAX_DIM * 100));
+  dim.value = String(Math.round(store.value.dim * 100));
+  dim.addEventListener("input", () => store.set({ dim: Number(dim.value) / 100 }));
+
+  // The store drives both the picture and the control reflections.
+  store.subscribe(() => {
+    reflect();
+    draw();
+  });
   new ResizeObserver(() => draw()).observe(canvas.parentElement ?? canvas);
-  selectTheme(THEME_IDS.includes(theme) ? theme : "paper");
 }
 
 void main();
