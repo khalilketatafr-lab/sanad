@@ -22,6 +22,7 @@ pub mod nonce;
 pub mod policy;
 pub mod replay;
 pub mod routes;
+pub mod sentinel;
 pub mod token;
 pub mod webauthn;
 
