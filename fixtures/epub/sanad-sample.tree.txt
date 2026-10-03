@@ -1,0 +1,56 @@
+EPUB 3.0  urn:uuid:5a1d0000-0000-4000-8000-00000000c0de
+  title: كليلة ودمنة: باب الحمامة المطوقة / Sanad sample: Kalīla and Dimna
+  language: ar, en  page-progression: rtl
+  spine: 2 items, 10 paragraphs
+  toc:
+    • باب الحمامة المطوقة  → OEBPS/text/c1.xhtml
+    • Kalīla and Dimna in Europe  → OEBPS/text/c2.xhtml
+      • The section ornament  → OEBPS/text/c2.xhtml#fig-ornament
+
+OEBPS/text/c1.xhtml (c1)  rtl·inherited  lang=ar  paragraphs=6
+└─ section Section  rtl·inherited  [chapter]  #c1
+   ├─ h1 Heading(1)  rtl·inherited  «باب الحمامة المطوقة»
+   ├─ blockquote Blockquote  ltr·attr  lang=en  [epigraph]  .epigraph
+   │  └─ p Paragraph  ltr·inherited  «It is a truth universally acknowle…»
+   │         runs: 3
+   │         · i  «It is a truth universally acknowle…»
+   │         · i  «Jane Austen»
+   ├─ p Paragraph  rtl·inherited  .first  «قال دبشليم الملك لبيدبا الفيلسوف: …»
+   ├─ p Paragraph  rtl·inherited  «قال الملك: وكيف كان ذلك؟ قال بيدبا…»
+   │      runs: 3
+   │      · sup noteref→#n1  «١»
+   ├─ p Paragraph  rtl·inherited  «ثم إن الصياد نصب شبكته، ونثر عليها…»
+   ├─ p Paragraph  rtl·inherited  «فقال الغراب: لأتبعهن وأنظر ما يكون…»
+   ├─ p Paragraph  rtl·inherited  «فلما انتهت الحمامة المطوقة إلى الج…»
+   ├─ hr SectionBreak  rtl·inherited  .section-break
+   ├─ ol List(ordered, start 1)  rtl·inherited  .cast
+   │  ├─ li ListItem(1)  rtl·inherited  «الحمامة المطوقة»
+   │  ├─ li ListItem(2)  rtl·inherited  «الجرذ»
+   │  ├─ li ListItem(3)  rtl·inherited  «الظبي»
+   │  └─ li ListItem(4)  rtl·inherited  «الغراب»
+   └─ aside Note  rtl·inherited  [footnote]  #n1
+      └─ p Paragraph  rtl·inherited  «١ سكاوندجين: اسم الأرض التي تجري ف…»
+             runs: 2
+             · link→c1.xhtml#r1  «١»
+
+OEBPS/text/c2.xhtml (c2)  ltr·detected  lang=en  paragraphs=4
+└─ section Section  ltr·detected  [chapter]  #c2
+   ├─ h1 Heading(1)  ltr·detected  «Kalīla and Dimna in Europe»
+   ├─ p Paragraph  rtl·attr  lang=ar  «صدرت رواية Pride and Prejudice للك…»
+   │      runs: 7
+   │      · lang=en i  «Pride and Prejudice»
+   │      · lang=en  «Jane Austen»
+   │      · lang=en  «It is a truth universally acknowle…»
+   ├─ p Paragraph  rtl·detected  lang=ar  «نقل عبد الله بن المقفع كتاب كليلة …»
+   │      runs: 5
+   │      · lang=sa-Latn i  «Panchatantra»
+   │      · lang=la i  «Directorium humanae vitae»
+   ├─ p Paragraph  ltr·detected  «The Arabic title كليلة ودمنة names…»
+   │      runs: 5
+   │      · lang=ar dir=rtl  «كليلة ودمنة»
+   │      · lang=la i  «Directorium humanae vitae»
+   ├─ figure Figure  ltr·detected  #fig-ornament
+   │  ├─ img Image(OEBPS/images/ornament.png)  ltr·default
+   │  └─ figcaption Caption  ltr·detected  «The section ornament used between …»
+   └─ blockquote Blockquote  rtl·attr  lang=ar  .vocalized
+      └─ p Paragraph  rtl·inherited  «قالَ الفيلسوفُ: إنَّ العاقلَ لا يَ…»

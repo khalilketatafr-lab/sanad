@@ -1,0 +1,5 @@
+/* Atelier applies no publisher CSS; classes are kept for edition design. */
+p.first { text-indent: 0; }
+blockquote.epigraph { font-style: italic; }
+hr.section-break { border: 0; }
+ol.cast { list-style-type: arabic-indic; }
