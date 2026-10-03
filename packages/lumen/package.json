@@ -24,6 +24,7 @@
   "dependencies": {
     "@sanad/lumen-wasm": "workspace:*",
     "@sanad/tokens": "workspace:*",
-    "fzstd": "^0.1.1"
+    "fzstd": "^0.1.1",
+    "xstate": "^5.33.2"
   }
 }

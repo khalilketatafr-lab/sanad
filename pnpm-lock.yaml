@@ -99,6 +99,9 @@ importers:
       fzstd:
         specifier: ^0.1.1
         version: 0.1.1
+      xstate:
+        specifier: ^5.33.2
+        version: 5.33.2
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1197,6 +1200,9 @@ packages:
     resolution: {integrity: sha512-wk4Mf4pR5mRP7eYuuTBCIQ9d0ud2Fv2jRLQpfgnRjbOxAFHmjKFValgTpitVKzJJS8ajnYQV2Du1SZ8j6b/EUQ==}
     engines: {node: '>= 0.4'}
 
+  xstate@5.33.2:
+    resolution: {integrity: sha512-8tC7yXgeCvpT8gKEeEje6ikJJG1wpnoLiXe+HfECW8m10ubMd3QxKOwWA8KxPJVBcLwfdRoMKYxIBGYKmo37/A==}
+
 snapshots:
 
   '@bundled-es-modules/deepmerge@4.3.2':
@@ -2113,3 +2119,5 @@ snapshots:
       get-proto: 1.0.1
       gopd: 1.2.0
       has-tostringtag: 1.0.2
+
+  xstate@5.33.2: {}
