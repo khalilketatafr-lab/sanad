@@ -19,6 +19,7 @@ pub mod error;
 pub mod jose;
 pub mod lease;
 pub mod nonce;
+pub mod policy;
 pub mod replay;
 pub mod routes;
 pub mod token;

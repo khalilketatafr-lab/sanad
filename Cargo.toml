@@ -53,6 +53,7 @@ tower-http = { version = "0.6", features = ["trace", "limit", "request-id", "tim
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 pasetors = { version = "0.8", default-features = false, features = ["std", "v4"] }
+cedar-policy = "4"                 # entitlement/session/device authorization (blueprint 01 §2)
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 url = "2"
