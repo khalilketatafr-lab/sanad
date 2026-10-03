@@ -18,6 +18,7 @@ pub mod ingest;
 pub mod msdf;
 pub mod page;
 pub mod permute;
+pub mod publish;
 pub mod qa;
 pub mod script;
 pub mod shape;

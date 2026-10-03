@@ -2543,9 +2543,11 @@ dependencies = [
 name = "sanad-atelier"
 version = "0.1.0"
 dependencies = [
+ "aws-lc-rs",
  "clap",
  "fdsm",
  "fdsm-ttf-parser",
+ "flatbuffers",
  "hyphenation",
  "image",
  "nalgebra",
@@ -2555,6 +2557,7 @@ dependencies = [
  "rand_core 0.9.5",
  "rustybuzz",
  "sanad-compositor",
+ "sanad-folio",
  "serde",
  "serde_json",
  "thiserror",
@@ -2564,7 +2567,9 @@ dependencies = [
  "ttf-parser",
  "unicode-bidi",
  "unicode-normalization",
+ "uuid",
  "zip",
+ "zstd",
 ]
 
 [[package]]
