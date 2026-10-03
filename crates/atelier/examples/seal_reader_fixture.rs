@@ -11,12 +11,12 @@ use std::path::Path;
 use std::str::FromStr;
 
 use rustybuzz::{Face, Language};
-use sanad_atelier::epub::{self, Limits};
 use sanad_atelier::atlas::AtlasParams;
 use sanad_atelier::book_atlas::{PAGE0_COVERAGE, build_book_atlas};
+use sanad_atelier::epub::{self, Limits};
 use sanad_atelier::ingest::{edition_permutation, typeset_book};
 use sanad_atelier::msdf::FieldParams;
-use sanad_atelier::publish::flow_payload;
+use sanad_atelier::publish::{flow_payload, seal_edition};
 use sanad_atelier::shape::{FontFace, Typesetter};
 use sanad_folio::codec::{ChunkFlags, ChunkIdentity, ChunkKind};
 use sanad_folio::schema::{Body, root_as_payload};
@@ -30,6 +30,8 @@ const ARABIC: &[u8] =
     include_bytes!("../../../fixtures/fonts/noto-naskh-arabic/NotoNaskhArabic-VF.ttf");
 const EDITION: &str = "00000000-0000-7000-8000-00000000ca7a";
 const TMK: [u8; 32] = [0x42; 32];
+/// Dev manifest-signing seed (the canary edition's published test key). Not for production.
+const SIGNING_SEED: [u8; 32] = [0x53; 32];
 
 type Error = Box<dyn std::error::Error>;
 
@@ -72,6 +74,7 @@ fn decode(fbuf: &[u8]) -> Result<Value, Error> {
     Ok(json!({ "blocks": blocks }))
 }
 
+#[allow(clippy::too_many_lines)] // a single linear fixture generator
 fn main() -> Result<(), Error> {
     let face = |d: &'static [u8]| Face::from_slice(d, 0).ok_or("unreadable font");
     let ts = Typesetter::new(
@@ -170,12 +173,37 @@ fn main() -> Result<(), Error> {
             "glyphs": glyphs,
         }))?,
     )?;
+    // The signed edition manifest (structure + atlas geometry), so the reader
+    // can fetch, verify (WebCrypto Ed25519) and parse it cross-language. We
+    // write only the manifest bytes, its detached signature, and the raw public
+    // key — not the full sealed object store.
+    let edition_sealed = seal_edition(
+        &ts,
+        &typeset,
+        &perm,
+        &atlas,
+        &tmk,
+        edition,
+        1,
+        &SIGNING_SEED,
+    )?;
+    let p = &edition_sealed.prefix;
+    let manifest_json = &edition_sealed.files[&format!("{p}/manifest.json")];
+    std::fs::write(dir.join("canary-manifest.json"), manifest_json)?;
+    std::fs::write(
+        dir.join("canary-manifest.sig"),
+        &edition_sealed.files[&format!("{p}/manifest.sig")],
+    )?;
+    std::fs::write(dir.join("canary-manifest.pub"), &edition_sealed.public_key)?;
+
     println!(
-        "wrote fixtures/folio/canary-chunk0-v0.folio ({} bytes), .expected.json, canary-atlas0.png ({}×{}), canary-glyphs.json ({} glyphs)",
+        "wrote fixtures/folio/canary-chunk0-v0.folio ({} bytes), .expected.json, canary-atlas0.png ({}×{}), canary-glyphs.json ({} glyphs), canary-manifest.json ({} bytes, {} chunks)",
         sealed.len(),
         page0.width,
         page0.height,
         page0.glyphs.len(),
+        manifest_json.len(),
+        edition_sealed.manifest.chunks.len(),
     );
     Ok(())
 }

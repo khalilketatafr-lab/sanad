@@ -17,6 +17,7 @@ import type { Compositor } from "@sanad/lumen-wasm";
 
 import { GLYPH_INSTANCE } from "../gl/shaders.ts";
 import type { FlowBlock, FlowChunk } from "../vault/flow.ts";
+import type { AtlasPage } from "../vault/manifest.ts";
 
 /** MSDF field density (crates/atelier/src/msdf.rs `FieldParams::em_texels`). */
 const EM_TEXELS = 48;
@@ -216,4 +217,21 @@ export function glyphTableFromJson(json: {
     glyphs.set(Number(id), { origin: g.o, texelsPerUnit: g.t, slots: g.s });
   }
   return { pxRange: json.pxRange, width: json.width, height: json.height, glyphs };
+}
+
+/**
+ * Builds a [`GlyphTable`] from a signed-manifest atlas page (see
+ * `src/vault/manifest.ts`), so the reader lays out against the same geometry
+ * the publisher signed. `pxRange` comes from the edition manifest.
+ */
+export function glyphTableFromManifest(atlasPage: AtlasPage, pxRange: number): GlyphTable {
+  const glyphs = new Map<number, AtlasGlyph>();
+  for (const g of atlasPage.glyphs) {
+    glyphs.set(g.id, {
+      origin: g.origin,
+      texelsPerUnit: g.texelsPerUnit,
+      slots: g.slots.map((s) => [s.x, s.y, s.w, s.h] as const),
+    });
+  }
+  return { pxRange, width: atlasPage.width, height: atlasPage.height, glyphs };
 }
