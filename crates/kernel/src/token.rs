@@ -40,6 +40,8 @@ pub enum TokenError {
     Issue,
     #[error("access token invalid or expired")]
     Invalid,
+    #[error("policy engine: {0}")]
+    Policy(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

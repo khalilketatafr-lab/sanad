@@ -18,6 +18,7 @@ use crate::auth::DpopAuth;
 use crate::error::{ApiError, DPOP_NONCE};
 use crate::jose::{P256PublicKey, b64url};
 use crate::lease::wrap_for_device;
+use crate::policy::{Entitlement, OpenContext, Principal, SAMPLE_CHAPTERS};
 use crate::token::RctClaims;
 use crate::{AppState, unix_now};
 
@@ -70,16 +71,44 @@ pub async fn open(
         .catalog
         .get(&edition_id)
         .ok_or(ApiError::NotFound("unknown edition"))?;
-    if !edition.free && auth.device.user_id.is_none() {
-        return Err(ApiError::Forbidden("sign in to open this edition"));
-    }
     let start = body.map(|Json(b)| b.start).unwrap_or_default();
     if start >= edition.chunks {
         return Err(ApiError::BadRequest(
             "window start is past the last chunk".into(),
         ));
     }
-    let end = (start + WINDOW).min(edition.chunks);
+    // Entitlement authorization (blueprint 01 §2). The principal and the
+    // entitlement kind come from Kernel-owned data, never the request. Session
+    // and device counts are prospective; the atomic session store (B.2) will
+    // supply real counts — until then an open counts as one of each.
+    let principal = match auth.device.user_id {
+        Some(uid) => Principal::User(uid.to_string()),
+        None => Principal::Anonymous,
+    };
+    let sample = matches!(&principal, Principal::Anonymous) && edition.free;
+    let entitlement = match (edition.free, &principal) {
+        (true, Principal::User(_)) => Entitlement::Free,
+        (true, Principal::Anonymous) => Entitlement::Sample,
+        // Phase 1a has no purchase/subscription store: a non-free edition has
+        // no entitlement yet, which the policy denies.
+        (false, _) => Entitlement::Purchase,
+    };
+    k.policy
+        .evaluate_open(
+            &principal,
+            &edition_id.to_string(),
+            &OpenContext {
+                entitlement,
+                active_sessions: 1,
+                active_devices: 1,
+                chapter: start,
+            },
+        )
+        .map_err(|_| ApiError::Forbidden("not authorized to open this edition"))?;
+    // Anonymous sampling never reaches past the sample boundary, even
+    // though the window would otherwise extend WINDOW chunks ahead.
+    let sample_ceiling = if sample { SAMPLE_CHAPTERS } else { u32::MAX };
+    let end = (start + WINDOW).min(edition.chunks).min(sample_ceiling);
 
     let variant = 0u8; // Phase 0: all-A variant vector.
     let keys = (start..end)

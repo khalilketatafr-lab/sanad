@@ -65,6 +65,8 @@ pub struct Kernel {
     pub catalog: Catalog,
     /// Single use of passkey ceremony challenges, per device key.
     pub ceremonies: ReplayCache,
+    /// Cedar entitlement authorization (blueprint 01 §2).
+    pub policy: crate::policy::PolicyEngine,
 }
 
 pub type AppState = Arc<Kernel>;
@@ -112,6 +114,8 @@ impl Kernel {
             } else {
                 Catalog::development()
             },
+            policy: crate::policy::PolicyEngine::new()
+                .map_err(|e| TokenError::Policy(e.to_string()))?,
             config,
         })
     }

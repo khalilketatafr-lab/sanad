@@ -206,6 +206,45 @@ pub async fn register(h: &Harness, dev: &TestDevice) -> String {
     ok.body["access_token"].as_str().unwrap().to_owned()
 }
 
+/// Registers `dev` and attaches a user account to it, so it opens free
+/// editions in full (not just the anonymous sample). Returns the access token.
+pub async fn register_member(h: &Harness, dev: &TestDevice) -> String {
+    let body = json!({ "ecdh_public_jwk": dev.ecdh_jwk, "platform": { "tier": "B" } });
+    let first = h
+        .send(register_request(
+            &dev.proof("POST", "/kernel/v1/devices", None, None, &Tweak::default()),
+            &body,
+        ))
+        .await;
+    let nonce = first
+        .headers
+        .get("dpop-nonce")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let ok = h
+        .send(register_request(
+            &dev.proof(
+                "POST",
+                "/kernel/v1/devices",
+                Some(&nonce),
+                None,
+                &Tweak::default(),
+            ),
+            &body,
+        ))
+        .await;
+    assert_eq!(ok.status, StatusCode::CREATED, "{}", ok.body);
+    let device_id = Uuid::parse_str(ok.body["device_id"].as_str().unwrap()).unwrap();
+    h.kernel
+        .devices
+        .attach_user(device_id, Uuid::now_v7(), 6)
+        .await
+        .unwrap();
+    ok.body["access_token"].as_str().unwrap().to_owned()
+}
+
 /// POST `body` to a DPoP-protected route as `dev` holding `token`.
 pub async fn post_json(
     h: &Harness,

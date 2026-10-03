@@ -10,7 +10,7 @@ use aws_lc_rs::hkdf::{HKDF_SHA256, Salt};
 use aws_lc_rs::key_wrap::{AES_256, AesKek, KeyWrap};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use common::{Harness, TestDevice, Tweak, harness, register};
+use common::{Harness, TestDevice, Tweak, harness, register, register_member};
 use sanad_folio::seal::{TitleMasterKey, derive_chunk_key};
 use sanad_kernel::catalog::CANARY_EDITION;
 use sanad_kernel::jose::{P256PublicKey, b64url_decode};
@@ -120,12 +120,41 @@ async fn device_opens_the_canary_edition_and_unwraps_folio_chunk_keys() {
 async fn window_start_and_end_follow_the_request() {
     let h = harness();
     let dev = TestDevice::new();
-    let token = register(&h, &dev).await;
+    // A signed-in member opens the free edition in full.
+    let token = register_member(&h, &dev).await;
     let res = open(&h, &dev, &token, &canary_path(), &json!({ "start": 4 })).await;
-    assert_eq!(res.status, StatusCode::OK);
+    assert_eq!(res.status, StatusCode::OK, "{}", res.body);
     assert_eq!(res.body["window"], json!([4, 6]), "clipped to the 6 chunks");
     let res = open(&h, &dev, &token, &canary_path(), &json!({ "start": 6 })).await;
     assert_eq!(res.status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn anonymous_sampling_is_limited_to_the_first_chapters() {
+    let h = harness();
+    let dev = TestDevice::new();
+    // A device with no account samples the free edition.
+    let token = register(&h, &dev).await;
+    // From the start: the window is the sample (first SAMPLE_CHAPTERS chunks).
+    let res = open(&h, &dev, &token, &canary_path(), &json!({ "start": 0 })).await;
+    assert_eq!(res.status, StatusCode::OK, "{}", res.body);
+    assert_eq!(res.body["window"], json!([0, 3]));
+    // Mid-sample: the window never bleeds past the sample boundary.
+    let res = open(&h, &dev, &token, &canary_path(), &json!({ "start": 2 })).await;
+    assert_eq!(res.status, StatusCode::OK, "{}", res.body);
+    assert_eq!(
+        res.body["window"],
+        json!([2, 3]),
+        "clamped to the sample ceiling"
+    );
+    // Past the sample window: denied until the reader signs in.
+    let res = open(&h, &dev, &token, &canary_path(), &json!({ "start": 3 })).await;
+    assert_eq!(res.status, StatusCode::FORBIDDEN, "{}", res.body);
+    // The same chapter opens for a signed-in member.
+    let member = TestDevice::new();
+    let mtoken = register_member(&h, &member).await;
+    let res = open(&h, &member, &mtoken, &canary_path(), &json!({ "start": 3 })).await;
+    assert_eq!(res.status, StatusCode::OK, "{}", res.body);
 }
 
 #[tokio::test]
