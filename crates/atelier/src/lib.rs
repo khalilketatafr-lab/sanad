@@ -11,6 +11,7 @@
 //! and shredded (P1).
 
 pub mod atlas;
+pub mod book_atlas;
 pub mod catalog;
 pub mod epub;
 pub mod ingest;
