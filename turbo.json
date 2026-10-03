@@ -35,6 +35,20 @@
       ],
       "outputs": ["dist/**"]
     },
+    "@sanad/reader-demo#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/crates/atelier/**",
+        "$TURBO_ROOT$/crates/compositor/**",
+        "$TURBO_ROOT$/fixtures/fonts/**",
+        "$TURBO_ROOT$/fixtures/epub/sanad-sample.epub",
+        "$TURBO_ROOT$/fixtures/folio/**",
+        "$TURBO_ROOT$/Cargo.lock",
+        "!**/*.md"
+      ],
+      "outputs": ["dist/**"]
+    },
     "@sanad/p1-harness#p1": {
       "dependsOn": ["@sanad/reader#build"],
       "inputs": ["$TURBO_DEFAULT$", "../../fixtures/canary/**"],

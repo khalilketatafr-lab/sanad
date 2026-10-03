@@ -12,7 +12,10 @@ use std::str::FromStr;
 
 use rustybuzz::{Face, Language};
 use sanad_atelier::epub::{self, Limits};
+use sanad_atelier::atlas::AtlasParams;
+use sanad_atelier::book_atlas::{PAGE0_COVERAGE, build_book_atlas};
 use sanad_atelier::ingest::{edition_permutation, typeset_book};
+use sanad_atelier::msdf::FieldParams;
 use sanad_atelier::publish::flow_payload;
 use sanad_atelier::shape::{FontFace, Typesetter};
 use sanad_folio::codec::{ChunkFlags, ChunkIdentity, ChunkKind};
@@ -125,9 +128,54 @@ fn main() -> Result<(), Error> {
         dir.join("canary-chunk0-v0.expected.json"),
         serde_json::to_vec_pretty(&expected)?,
     )?;
+
+    // Atlas page 0 (PNG) and glyph table, so the reader can render the chunk.
+    let atlas = build_book_atlas(
+        &ts,
+        &typeset,
+        &perm,
+        &FieldParams::default(),
+        &AtlasParams::default(),
+        PAGE0_COVERAGE,
+        [0x5A; 32],
+    )?;
+    let page0 = &atlas.pages[0];
+    image::save_buffer(
+        dir.join("canary-atlas0.png"),
+        &page0.rgba,
+        page0.width,
+        page0.height,
+        image::ExtendedColorType::Rgba8,
+    )?;
+    let glyphs: serde_json::Map<String, Value> = page0
+        .glyphs
+        .iter()
+        .map(|(&gid, g)| {
+            (
+                gid.to_string(),
+                json!({
+                    "o": [g.origin.0, g.origin.1],
+                    "t": g.texels_per_unit,
+                    "s": g.slots.iter().map(|s| [s.x, s.y, s.w, s.h]).collect::<Vec<_>>(),
+                }),
+            )
+        })
+        .collect();
+    std::fs::write(
+        dir.join("canary-glyphs.json"),
+        serde_json::to_vec(&json!({
+            "pxRange": page0.px_range,
+            "width": page0.width,
+            "height": page0.height,
+            "glyphs": glyphs,
+        }))?,
+    )?;
     println!(
-        "wrote fixtures/folio/canary-chunk0-v0.folio ({} bytes) and .expected.json",
-        sealed.len()
+        "wrote fixtures/folio/canary-chunk0-v0.folio ({} bytes), .expected.json, canary-atlas0.png ({}×{}), canary-glyphs.json ({} glyphs)",
+        sealed.len(),
+        page0.width,
+        page0.height,
+        page0.glyphs.len(),
     );
     Ok(())
 }

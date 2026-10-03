@@ -31,7 +31,7 @@ ttf-parser.workspace = true
 fdsm.workspace = true
 fdsm-ttf-parser.workspace = true
 nalgebra.workspace = true
-image.workspace = true
+image = { workspace = true, features = ["png"] }
 unicode-bidi.workspace = true
 unicode-normalization.workspace = true
 hyphenation.workspace = true

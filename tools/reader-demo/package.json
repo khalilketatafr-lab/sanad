@@ -1,0 +1,21 @@
+{
+  "name": "@sanad/reader-demo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A self-contained page that opens a real Atelier-sealed Folio chunk (decrypt + zstd + FlatBuffer), lays it out with the Compositor (WASM) and renders it with Lumen (WebGL2) — the full reader path end to end.",
+  "scripts": {
+    "build": "node build.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sanad/lumen": "workspace:*",
+    "@sanad/lumen-wasm": "workspace:*",
+    "@sanad/tokens": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "esbuild": "catalog:",
+    "typescript": "catalog:"
+  }
+}
