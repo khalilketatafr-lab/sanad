@@ -130,6 +130,56 @@ async fn window_start_and_end_follow_the_request() {
 }
 
 #[tokio::test]
+async fn sentinel_shrinks_the_window_for_a_bot_and_pauses_clear_automation() {
+    let h = harness();
+    let dev = TestDevice::new();
+    let token = register_member(&h, &dev).await;
+
+    // A normal open: full window, and a stable 64-bit session id for Ex Libris.
+    let ok = open(&h, &dev, &token, &canary_path(), &json!({})).await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.body);
+    assert_eq!(ok.body["window"], json!([0, 3]));
+    let sid = ok.body["session_id"].as_str().unwrap().to_owned();
+    assert!(sid.parse::<u64>().is_ok(), "session id is a 64-bit value");
+
+    // A robotic window (fast, metronomic, 80 pages) → Sentinel watches → the
+    // prefetch window is clamped to a single chunk, and the id is unchanged.
+    let bot = json!({ "digest": {
+        "pages": 80, "span_ms": 80000, "dwell_cv": 0.05, "visibility_ratio": 1.0,
+        "frame_regularity": 0.2, "keyboard_only": false, "webdriver": false,
+        "software_renderer": false, "datacenter_ip": false, "concurrent_sessions": 1
+    }});
+    let watched = open(&h, &dev, &token, &canary_path(), &bot).await;
+    assert_eq!(watched.status, StatusCode::OK, "{}", watched.body);
+    assert_eq!(
+        watched.body["window"],
+        json!([0, 1]),
+        "window shrank to one chunk"
+    );
+    assert_eq!(
+        watched.body["session_id"],
+        json!(sid),
+        "the session id is stable"
+    );
+    // The RCT carries the same session id for forensic services.
+    let rct = h
+        .kernel
+        .tokens
+        .verify_rct(watched.body["rct"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(rct.session_id.to_string(), sid);
+
+    // Clear automation (headless, datacenter IP, many concurrent) → paused.
+    let clear = json!({ "digest": {
+        "pages": 200, "span_ms": 60000, "dwell_cv": 0.02, "visibility_ratio": 0.1,
+        "frame_regularity": 0.95, "keyboard_only": true, "webdriver": true,
+        "software_renderer": true, "datacenter_ip": true, "concurrent_sessions": 8
+    }});
+    let paused = open(&h, &dev, &token, &canary_path(), &clear).await;
+    assert_eq!(paused.status, StatusCode::FORBIDDEN, "{}", paused.body);
+}
+
+#[tokio::test]
 async fn anonymous_sampling_is_limited_to_the_first_chapters() {
     let h = harness();
     let dev = TestDevice::new();

@@ -86,6 +86,8 @@ pub struct RctClaims {
     pub window: [u32; 2],
     /// Protection profile (`standard` or `vault`).
     pub profile: String,
+    /// 64-bit reading-session id; the Ex Libris watermark seed (05 §4).
+    pub session_id: u64,
 }
 
 pub struct TokenIssuer {
@@ -236,6 +238,9 @@ impl TokenIssuer {
             .map_err(|_| TokenError::Issue)?;
         c.add_additional("pro", claims.profile.clone())
             .map_err(|_| TokenError::Issue)?;
+        // u64 can exceed JSON's safe-integer range, so carry it as a string.
+        c.add_additional("sid", claims.session_id.to_string())
+            .map_err(|_| TokenError::Issue)?;
         public::sign(&self.secret, &c, None, Some(IMPLICIT_RCT)).map_err(|_| TokenError::Issue)
     }
 
@@ -278,6 +283,7 @@ impl TokenIssuer {
             lease_id: uuid("jti")?,
             window,
             profile: str_claim("pro")?.to_owned(),
+            session_id: str_claim("sid")?.parse().map_err(|_| TokenError::Invalid)?,
         })
     }
 
@@ -370,6 +376,7 @@ mod tests {
             lease_id: Uuid::now_v7(),
             window: [20, 25],
             profile: "standard".into(),
+            session_id: 0xDEAD_BEEF_0000_0001,
         };
         let token = t
             .issue_rct(&rct, Duration::from_mins(15))

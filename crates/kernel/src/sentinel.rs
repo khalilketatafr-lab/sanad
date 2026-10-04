@@ -225,6 +225,21 @@ impl Sentinel {
         Level::from_u8(self.level)
     }
 
+    /// Reconstructs persisted state (for the session store). `rank` is 0..=4.
+    #[must_use]
+    pub fn restore(rank: u8, l1_streak: u32) -> Self {
+        Self {
+            level: rank.min(4),
+            l1_streak,
+        }
+    }
+
+    /// The persistable state: `(level rank 0..=4, level-1 streak)`.
+    #[must_use]
+    pub fn snapshot(&self) -> (u8, u32) {
+        (self.level, self.l1_streak)
+    }
+
     /// Folds one window into the risk state and returns the response to apply.
     ///
     /// Escalation is immediate to the level the evidence supports; de-escalation
@@ -283,8 +298,8 @@ mod tests {
         fn next_u32(&mut self) -> u32 {
             self.0 = self
                 .0
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
             (self.0 >> 33) as u32
         }
         /// Uniform f64 in [0, 1).

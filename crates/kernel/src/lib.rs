@@ -23,6 +23,7 @@ pub mod policy;
 pub mod replay;
 pub mod routes;
 pub mod sentinel;
+pub mod session;
 pub mod token;
 pub mod webauthn;
 
@@ -63,6 +64,8 @@ pub struct Kernel {
     pub tokens: TokenIssuer,
     pub devices: DeviceStore,
     pub accounts: AccountStore,
+    /// Reading-session risk state + watermark seeds (blueprint 05 §5).
+    pub sessions: crate::session::SessionStore,
     pub catalog: Catalog,
     /// Single use of passkey ceremony challenges, per device key.
     pub ceremonies: ReplayCache,
@@ -103,6 +106,7 @@ impl Kernel {
             replay: ReplayCache::new(2 * config.proof_skew_secs + 1, 1_000_000),
             tokens,
             accounts: AccountStore::alongside(&devices),
+            sessions: crate::session::SessionStore::alongside(&devices),
             devices,
             ceremonies: ReplayCache::new(
                 CEREMONY_TTL.as_secs() as i64 + config.proof_skew_secs,

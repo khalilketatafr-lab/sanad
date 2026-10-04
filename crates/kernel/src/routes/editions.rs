@@ -19,6 +19,7 @@ use crate::error::{ApiError, DPOP_NONCE};
 use crate::jose::{P256PublicKey, b64url};
 use crate::lease::wrap_for_device;
 use crate::policy::{Entitlement, OpenContext, Principal, SAMPLE_CHAPTERS};
+use crate::sentinel::{Attestation, SessionDigest};
 use crate::token::RctClaims;
 use crate::{AppState, unix_now};
 
@@ -32,6 +33,45 @@ pub struct OpenRequest {
     /// First chunk of the window (default 0: the beginning, or a sync anchor).
     #[serde(default)]
     pub start: u32,
+    /// The client's behavioural digest for this window (05 §5.1). Omitted on a
+    /// first open; a missing digest is treated as a neutral, human window.
+    #[serde(default)]
+    pub digest: Option<DigestInput>,
+}
+
+/// A Sentinel behavioural digest from the client. No content — aggregates only.
+// Independent automation signals, kept flat to mirror `sentinel::SessionDigest`.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DigestInput {
+    pub pages: u32,
+    pub span_ms: u64,
+    pub dwell_cv: f64,
+    pub visibility_ratio: f64,
+    pub frame_regularity: f64,
+    pub keyboard_only: bool,
+    pub webdriver: bool,
+    pub software_renderer: bool,
+    pub datacenter_ip: bool,
+    pub concurrent_sessions: u32,
+}
+
+impl DigestInput {
+    fn into_sentinel(self) -> SessionDigest {
+        SessionDigest {
+            pages: self.pages,
+            span_ms: self.span_ms,
+            dwell_cv: self.dwell_cv,
+            visibility_ratio: self.visibility_ratio,
+            frame_regularity: self.frame_regularity,
+            keyboard_only: self.keyboard_only,
+            webdriver: self.webdriver,
+            software_renderer: self.software_renderer,
+            datacenter_ip: self.datacenter_ip,
+            concurrent_sessions: self.concurrent_sessions,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -54,8 +94,12 @@ pub struct LeaseResponse {
     pub keys: Vec<LeaseKey>,
     /// Reading Capability Token (PASETO v4.public).
     pub rct: String,
+    /// 64-bit reading-session id (decimal string): the Ex Libris watermark
+    /// seed the client applies to this session's pages (05 §4).
+    pub session_id: String,
 }
 
+#[allow(clippy::too_many_lines)] // a single linear open handler
 pub async fn open(
     State(k): State<AppState>,
     Path(op): Path<String>,
@@ -71,7 +115,10 @@ pub async fn open(
         .catalog
         .get(&edition_id)
         .ok_or(ApiError::NotFound("unknown edition"))?;
-    let start = body.map(|Json(b)| b.start).unwrap_or_default();
+    let (start, digest_input) = match body {
+        Some(Json(b)) => (b.start, b.digest),
+        None => (0, None),
+    };
     if start >= edition.chunks {
         return Err(ApiError::BadRequest(
             "window start is past the last chunk".into(),
@@ -105,10 +152,31 @@ pub async fn open(
             },
         )
         .map_err(|_| ApiError::Forbidden("not authorized to open this edition"))?;
+    // Reading-session risk (blueprint 05 §5): fold the client's behavioural
+    // digest through this session's Sentinel and apply the response. A paused
+    // session is refused; a watched or paced one gets a 1-chunk prefetch.
+    let digest = digest_input.map_or_else(
+        || SessionDigest::human(0, 0, 1.0),
+        DigestInput::into_sentinel,
+    );
+    let outcome = k
+        .sessions
+        .observe(
+            auth.device.id,
+            auth.device.user_id,
+            &digest,
+            Attestation::NotRequested,
+        )
+        .await
+        .map_err(|_| ApiError::Internal)?;
+    if outcome.response.paused {
+        return Err(ApiError::Forbidden("session paused pending review"));
+    }
     // Anonymous sampling never reaches past the sample boundary, even
-    // though the window would otherwise extend WINDOW chunks ahead.
+    // though the window would otherwise extend further ahead.
+    let ahead = outcome.response.ahead_chunks.max(1);
     let sample_ceiling = if sample { SAMPLE_CHAPTERS } else { u32::MAX };
-    let end = (start + WINDOW).min(edition.chunks).min(sample_ceiling);
+    let end = (start + ahead).min(edition.chunks).min(sample_ceiling);
 
     let variant = 0u8; // Phase 0: all-A variant vector.
     let keys = (start..end)
@@ -135,6 +203,7 @@ pub async fn open(
                 lease_id,
                 window: [start, end],
                 profile: "standard".into(),
+                session_id: outcome.session_id,
             },
             ttl,
         )
@@ -164,6 +233,7 @@ pub async fn open(
                 })
                 .collect(),
             rct,
+            session_id: outcome.session_id.to_string(),
         }),
     ))
 }
