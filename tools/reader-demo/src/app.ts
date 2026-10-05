@@ -178,6 +178,13 @@ async function main(): Promise<void> {
     draw();
   });
   new ResizeObserver(() => draw()).observe(canvas.parentElement ?? canvas);
+
+  // Signal first paint so the P1 harness scans a fully-rendered page.
+  try {
+    performance.mark("lumen:ready");
+  } catch {
+    /* performance API unavailable */
+  }
 }
 
 void main();

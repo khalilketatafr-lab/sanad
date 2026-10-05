@@ -1,0 +1,11 @@
+{
+  "$comment": "Real phrases present in the book the reader-demo renders (Austen + Kalila wa-Dimna, from fixtures/epub/sanad-sample.epub). Used by reader-drill.ts to prove this exact on-screen text appears NOWHERE on the client. Server-side only; never referenced from client code.",
+  "version": 1,
+  "shingleWords": 4,
+  "minShingleChars": 18,
+  "phrases": [
+    { "id": "austen-en", "lang": "en", "text": "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife" },
+    { "id": "kalila-title-ar", "lang": "ar", "text": "باب الحمامة المطوقة" },
+    { "id": "kalila-body-ar", "lang": "ar", "text": "قال دبشليم الملك لبيدبا الفيلسوف قد سمعت مثل المتحابين" }
+  ]
+}
