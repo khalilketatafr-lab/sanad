@@ -72,7 +72,7 @@ const THEME_BUTTONS = (Object.keys(THEMES) as ThemeId[])
   .join("");
 
 function page(body: { data: string; script: string }): string {
-  return `<title>Sanad Reader Demo</title>
+  return `<title>Sanad Reader</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Literata:opsz,wght@7..72,400&display=swap">
 <style>
@@ -87,6 +87,8 @@ body { background: var(--paper); color: var(--ink); font: 400 15px/1.5 var(--fon
 .intro { padding: 16px 0 4px; max-width: 70ch; }
 .intro h1 { margin: 0; font: 600 1.3rem/1.2 var(--font-display); }
 .intro p { margin: 6px 0 0; color: var(--ink-2); font-size: 0.85rem; }
+.intro .test { margin-top: 10px; color: var(--ink); background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 8px; padding: 10px 12px; }
+.intro .test em { font-style: normal; font-weight: 600; color: var(--accent); }
 .bar { position: sticky; top: 0; z-index: 2; padding: 10px 0; background: var(--paper); border-bottom: 1px solid var(--hairline); display: flex; flex-wrap: wrap; gap: 8px; }
 .theme { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 12px 4px 4px; border: 1px solid var(--hairline); border-radius: 22px; background: var(--surface-1); color: var(--ink); font: 500 0.85rem var(--font-ui); cursor: pointer; }
 .theme[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -111,8 +113,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 #status { padding: 12px; border-radius: 8px; background: var(--surface-2); }
 </style>
 <header class="intro">
-  <h1>Sanad Reader Demo</h1>
+  <h1>Sanad Reader — Live Protection Test</h1>
   <p>This page opens a real Folio chunk sealed by Atelier — AES-256-GCM decrypt, zstd inflate, FlatBuffer parse — lays it out with the Compositor (WebAssembly) and renders it with Lumen (WebGL2). Only a sealed chunk, an atlas and the lease key are shipped; never text.</p>
+  <p class="test"><strong>Try to capture it.</strong> With the capture shield on: <em>Win+Shift+S</em>, the Snipping Tool, <em>Alt+Tab</em> or clicking outside blanks the page before the snip lands; <em>PrintScreen</em> raises a warning, then suspends access; right-click, text selection and copy give nothing; and <em>View Source</em> shows only ciphertext — search it for any sentence on screen and you will not find it. Honest limit: Win+PrintScreen straight to a file, dedicated capture software and a phone camera still capture — those are caught by the forensic watermark and the server-side velocity model, not the browser.</p>
 </header>
 <div class="bar" role="radiogroup" aria-label="Reading theme">${THEME_BUTTONS}</div>
 <main class="layout">
@@ -136,6 +139,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       </div></div>
       <div class="control"><label for="warmth">Warmth</label><input id="warmth" type="range" min="0" max="100" value="0"><output id="warmth-value">0</output></div>
       <div class="control"><label for="dim">Extra dim</label><input id="dim" type="range" min="0" max="60" value="0"><output id="dim-value">0%</output></div>
+    </section>
+    <section>
+      <h2>Protection</h2>
+      <label class="sw" style="display:inline-flex;gap:8px;align-items:center;font-weight:600;min-height:40px"><input id="shield" type="checkbox" checked> Capture shield</label>
+      <p class="note">Blanks the page the instant the window loses focus (Snipping Tool, Alt+Tab), warns then suspends on PrintScreen, and neutralises the clipboard. Deterrence, not a block — the authoritative response is server-side.</p>
     </section>
     <section>
       <h2>Pipeline</h2>

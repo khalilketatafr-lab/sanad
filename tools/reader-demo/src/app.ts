@@ -15,6 +15,7 @@
 import { createLumenContext, type LumenContext } from "@sanad/lumen/gl/context";
 import { LumenRenderer, orthoCamera } from "@sanad/lumen/gl/renderer";
 import { MAX_DIM, themeUniforms } from "@sanad/lumen/gl/themes";
+import { installCaptureShield, type CaptureShield, type CaptureSignal } from "@sanad/lumen/reader/capture-shield";
 import { glyphTableFromJson, layoutChunk } from "@sanad/lumen/reader/layout";
 import {
   SIZE_STEPS,
@@ -178,6 +179,32 @@ async function main(): Promise<void> {
     draw();
   });
   new ResizeObserver(() => draw()).observe(canvas.parentElement ?? canvas);
+
+  // Capture shield (opt-in): veil on focus loss + PrintScreen/clipboard signals.
+  let shield: CaptureShield | undefined;
+  function onCaptureSignal(sig: CaptureSignal): void {
+    const msg = sig.blocked
+      ? "🚫 Access suspended — repeated capture attempts were detected."
+      : sig.strikes === 1
+        ? "⚠️ Screen capture is disabled for this book. This attempt was logged."
+        : "🚨 Final warning — the next attempt suspends your access.";
+    status.textContent = msg;
+    status.hidden = false;
+  }
+  function setShield(on: boolean): void {
+    if (on && shield === undefined) {
+      shield = installCaptureShield(window, { veil: true, veilColor: THEMES[store.value.theme].css["--paper"] }, onCaptureSignal);
+    } else if (!on && shield !== undefined) {
+      shield.dispose();
+      shield = undefined;
+      status.hidden = true;
+    }
+  }
+  const shieldToggle = document.getElementById("shield") as HTMLInputElement | null;
+  if (shieldToggle !== null) {
+    setShield(shieldToggle.checked);
+    shieldToggle.addEventListener("change", () => setShield(shieldToggle.checked));
+  }
 
   // Signal first paint so the P1 harness scans a fully-rendered page.
   try {
